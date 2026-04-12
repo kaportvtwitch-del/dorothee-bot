@@ -1,1 +1,14 @@
-{"name":"anniv-bot","version":"1.0.0","main":"index.js","scripts":{"start":"node index.js"},"dependencies":{"discord.js":"^14.0.0","sqlite3":"^5.1.6","express":"^4.18.2"}}
+{
+  "name": "dorothee-bot",
+  "version": "1.0.0",
+  "description": "Bot anniversaire Kapor_TV",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.11.0",
+    "sqlite3": "^5.1.6",
+    "express": "^4.18.2"
+  }
+}
