@@ -4,11 +4,12 @@
   "description": "Bot anniversaire Kapor_TV",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "postinstall": "npm audit fix --force"
   },
   "dependencies": {
-    "discord.js": "^14.11.0",
-    "sqlite3": "^5.1.6",
-    "express": "^4.18.2"
+    "discord.js": "^14.11.1",
+    "sqlite3": "^5.1.7",
+    "express": "^4.18.3"
   }
 }
