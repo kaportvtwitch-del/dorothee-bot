@@ -8,30 +8,23 @@ const {
   PermissionsBitField
 } = require("discord.js");
 
-const sqlite3 = require("sqlite3").verbose();
+const fs = require("fs");
 
-// 🚀 INIT BOT
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
+// 📁 FICHIER PERSISTANT
+const DATA_FILE = "/home/u585460519/anniv.json";
 
-// 💾 DB PERSISTANTE (Hostinger)
-const db = new sqlite3.Database("/home/u585460519/anniv.db");
+// 📦 LOAD DATA
+function loadData() {
+  if (!fs.existsSync(DATA_FILE)) return {};
+  return JSON.parse(fs.readFileSync(DATA_FILE));
+}
 
-// 📦 TABLE
-db.run(`
-CREATE TABLE IF NOT EXISTS anniversaires (
-  week TEXT,
-  user TEXT,
-  guild TEXT
-)
-`);
+// 💾 SAVE DATA
+function saveData(data) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
+}
 
-// 🧠 SEMAINE ACTUELLE
+// 🧠 SEMAINE
 function getWeek() {
   const now = new Date();
   const year = now.getFullYear();
@@ -40,14 +33,26 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// ✅ BOT READY
+// 🚀 BOT
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
 client.once("ready", () => {
-  console.log("🔥 BOT CONNECTÉ (INSTANCE UNIQUE)");
+  console.log("🔥 BOT CONNECTÉ (JSON VERSION)");
 });
 
 // 📺 COMMANDES
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+
+  const data = loadData();
+  const week = getWeek();
+  const guildId = message.guild.id;
 
   // 🎉 PANEL
   if (message.content === "!anniv_panel") {
@@ -67,85 +72,60 @@ client.on("messageCreate", async (message) => {
 
   // 📋 LISTE
   if (message.content === "!anniv_list") {
-    const week = getWeek();
-    const guildId = message.guild.id;
+    const list = data[guildId]?.[week] || [];
 
-    db.all(
-      "SELECT user FROM anniversaires WHERE week=? AND guild=?",
-      [week, guildId],
-      (err, rows) => {
-        if (!rows || rows.length === 0) {
-          return message.channel.send(
-            "📭 Aucun participant cette semaine"
-          );
-        }
+    if (list.length === 0) {
+      return message.channel.send("📭 Aucun participant cette semaine");
+    }
 
-        const list = rows.map(r => `<@${r.user}>`).join("\n");
+    const formatted = list.map(id => `<@${id}>`).join("\n");
 
-        message.channel.send(
-          `🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**\n\n${list}\n\n💜 Kapor_TV`
-        );
-      }
+    message.channel.send(
+      `🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**\n\n${formatted}\n\n💜 Kapor_TV`
     );
   }
 
-  // 🧹 RESET (ADMIN)
+  // 🧹 RESET
   if (message.content === "!anniv_reset") {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return message.reply("❌ Tu n'as pas la permission !");
     }
 
-    const week = getWeek();
-    const guildId = message.guild.id;
+    if (!data[guildId]) data[guildId] = {};
+    data[guildId][week] = [];
 
-    db.run(
-      "DELETE FROM anniversaires WHERE week=? AND guild=?",
-      [week, guildId],
-      function (err) {
-        if (err) {
-          return message.channel.send("❌ Erreur lors du reset");
-        }
+    saveData(data);
 
-        message.channel.send(
-          "🧹 Liste des anniversaires réinitialisée pour cette semaine !"
-        );
-      }
-    );
+    message.channel.send("🧹 Liste réinitialisée !");
   }
 });
 
-// 🎯 BOUTON INSCRIPTION
+// 🎯 BOUTON
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
-  if (interaction.customId === "join_anniv") {
-    const week = getWeek();
-    const userId = interaction.user.id;
-    const guildId = interaction.guild.id;
+  const data = loadData();
+  const week = getWeek();
+  const guildId = interaction.guild.id;
+  const userId = interaction.user.id;
 
-    db.get(
-      "SELECT * FROM anniversaires WHERE week=? AND user=? AND guild=?",
-      [week, userId, guildId],
-      (err, row) => {
-        if (row) {
-          return interaction.reply({
-            content: "⚠️ Déjà inscrit cette semaine !",
-            ephemeral: true
-          });
-        }
+  if (!data[guildId]) data[guildId] = {};
+  if (!data[guildId][week]) data[guildId][week] = [];
 
-        db.run(
-          "INSERT INTO anniversaires (week, user, guild) VALUES (?, ?, ?)",
-          [week, userId, guildId]
-        );
-
-        interaction.reply({
-          content: "🎉 Inscrit au Club Anniv de la semaine !",
-          ephemeral: true
-        });
-      }
-    );
+  if (data[guildId][week].includes(userId)) {
+    return interaction.reply({
+      content: "⚠️ Déjà inscrit !",
+      ephemeral: true
+    });
   }
+
+  data[guildId][week].push(userId);
+  saveData(data);
+
+  interaction.reply({
+    content: "🎉 Inscrit au Club Anniv !",
+    ephemeral: true
+  });
 });
 
 // 🔐 LOGIN
