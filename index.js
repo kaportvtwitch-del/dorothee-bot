@@ -33,7 +33,7 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// 🚀 BOT
+// 🚀 INIT BOT
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -42,8 +42,9 @@ const client = new Client({
   ]
 });
 
+// ✅ READY
 client.once("ready", () => {
-  console.log("🔥 BOT CONNECTÉ (JSON VERSION)");
+  console.log("🔥 BOT CONNECTÉ (VERSION FINALE)");
 });
 
 // 📺 COMMANDES
@@ -53,6 +54,17 @@ client.on("messageCreate", async (message) => {
   const data = loadData();
   const week = getWeek();
   const guildId = message.guild.id;
+
+  // INIT SERVEUR
+  if (!data[guildId]) data[guildId] = {};
+
+  // INIT SETTINGS
+  if (!data[guildId].settings) {
+    data[guildId].settings = {
+      title: "🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**",
+      footer: "💜 Kapor_TV"
+    };
+  }
 
   // 🎉 PANEL
   if (message.content === "!anniv_panel") {
@@ -72,7 +84,7 @@ client.on("messageCreate", async (message) => {
 
   // 📋 LISTE
   if (message.content === "!anniv_list") {
-    const list = data[guildId]?.[week] || [];
+    const list = data[guildId][week] || [];
 
     if (list.length === 0) {
       return message.channel.send("📭 Aucun participant cette semaine");
@@ -81,8 +93,36 @@ client.on("messageCreate", async (message) => {
     const formatted = list.map(id => `<@${id}>`).join("\n");
 
     message.channel.send(
-      `🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**\n\n${formatted}\n\n💜 Kapor_TV`
+      `${data[guildId].settings.title}\n\n${formatted}\n\n${data[guildId].settings.footer}`
     );
+  }
+
+  // 🏷️ CHANGER TITRE
+  if (message.content.startsWith("!anniv_titre ")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ Permission refusée");
+    }
+
+    const newTitle = message.content.replace("!anniv_titre ", "");
+
+    data[guildId].settings.title = newTitle;
+    saveData(data);
+
+    message.reply("✅ Titre mis à jour !");
+  }
+
+  // 💬 CHANGER MESSAGE BAS
+  if (message.content.startsWith("!anniv_message ")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ Permission refusée");
+    }
+
+    const newFooter = message.content.replace("!anniv_message ", "");
+
+    data[guildId].settings.footer = newFooter;
+    saveData(data);
+
+    message.reply("✅ Message mis à jour !");
   }
 
   // 🧹 RESET
@@ -91,9 +131,7 @@ client.on("messageCreate", async (message) => {
       return message.reply("❌ Tu n'as pas la permission !");
     }
 
-    if (!data[guildId]) data[guildId] = {};
     data[guildId][week] = [];
-
     saveData(data);
 
     message.channel.send("🧹 Liste réinitialisée !");
@@ -109,9 +147,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
   const guildId = interaction.guild.id;
   const userId = interaction.user.id;
 
+  // INIT
   if (!data[guildId]) data[guildId] = {};
   if (!data[guildId][week]) data[guildId][week] = [];
 
+  // INIT SETTINGS (sécurité)
+  if (!data[guildId].settings) {
+    data[guildId].settings = {
+      title: "🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**",
+      footer: "💜 Kapor_TV"
+    };
+  }
+
+  // CHECK DOUBLON
   if (data[guildId][week].includes(userId)) {
     return interaction.reply({
       content: "⚠️ Déjà inscrit !",
@@ -119,6 +167,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
   }
 
+  // AJOUT
   data[guildId][week].push(userId);
   saveData(data);
 
