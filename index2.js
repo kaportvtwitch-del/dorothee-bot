@@ -9,7 +9,7 @@ const {
 
 const sqlite3 = require("sqlite3").verbose();
 
-// 🚀 INIT BOT
+// BOT INIT
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -18,19 +18,17 @@ const client = new Client({
   ]
 });
 
-// 💾 DB PERSISTANTE (IMPORTANT)
-const db = new sqlite3.Database("/home/u585460519/anniv.db");
+// DB
+const db = new sqlite3.Database("./anniv.db");
 
-// 📦 TABLE
 db.run(`
 CREATE TABLE IF NOT EXISTS anniversaires (
   week TEXT,
-  user TEXT,
-  guild TEXT
+  user TEXT
 )
 `);
 
-// 🧠 SEMAINE ACTUELLE
+// 🧠 semaine actuelle
 function getWeek() {
   const now = new Date();
   const year = now.getFullYear();
@@ -39,16 +37,11 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// ✅ BOT READY (debug anti double instance)
-client.once("ready", () => {
-  console.log("🔥 BOT CONNECTÉ (INSTANCE UNIQUE)");
-});
-
-// 📺 COMMANDES
+// 📺 COMMANDES TEXT
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
-  // 🎉 PANEL
+  // PANEL BOUTON
   if (message.content === "!anniv_panel") {
     const button = new ButtonBuilder()
       .setCustomId("join_anniv")
@@ -64,20 +57,16 @@ client.on("messageCreate", async (message) => {
     });
   }
 
-  // 📋 LISTE
+  // LISTE
   if (message.content === "!anniv_list") {
     const week = getWeek();
-    const guildId = message.guild.id;
 
     db.all(
-      "SELECT user FROM anniversaires WHERE week=? AND guild=?",
-      [week, guildId],
+      "SELECT user FROM anniversaires WHERE week=?",
+      [week],
       (err, rows) => {
-        if (!rows || rows.length === 0) {
-          return message.channel.send(
-            "📭 Aucun participant cette semaine"
-          );
-        }
+        if (!rows.length)
+          return message.channel.send("📭 Aucun participant cette semaine");
 
         const list = rows.map(r => `<@${r.user}>`).join("\n");
 
@@ -89,18 +78,17 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// 🎯 BOUTON
+// 🎯 INTERACTIONS BOUTON
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
   if (interaction.customId === "join_anniv") {
     const week = getWeek();
     const userId = interaction.user.id;
-    const guildId = interaction.guild.id;
 
     db.get(
-      "SELECT * FROM anniversaires WHERE week=? AND user=? AND guild=?",
-      [week, userId, guildId],
+      "SELECT * FROM anniversaires WHERE week=? AND user=?",
+      [week, userId],
       (err, row) => {
         if (row) {
           return interaction.reply({
@@ -110,8 +98,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         db.run(
-          "INSERT INTO anniversaires (week, user, guild) VALUES (?, ?, ?)",
-          [week, userId, guildId]
+          "INSERT INTO anniversaires (week, user) VALUES (?, ?)",
+          [week, userId]
         );
 
         interaction.reply({
@@ -123,5 +111,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// 🔐 LOGIN
+// 🚀 LOGIN
 client.login(process.env.DISCORD_TOKEN);
