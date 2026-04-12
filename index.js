@@ -13,6 +13,11 @@ const fs = require("fs");
 // 📁 FICHIER PERSISTANT
 const DATA_FILE = "/home/u585460519/anniv.json";
 
+// 📦 INIT FICHIER SI ABSENT
+if (!fs.existsSync(DATA_FILE)) {
+  fs.writeFileSync(DATA_FILE, JSON.stringify({}, null, 2));
+}
+
 // 📦 LOAD DATA
 function loadData() {
   if (!fs.existsSync(DATA_FILE)) return {};
@@ -61,7 +66,7 @@ client.on("messageCreate", async (message) => {
   // INIT SETTINGS
   if (!data[guildId].settings) {
     data[guildId].settings = {
-      title: "🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**",
+      title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
       footer: "💜 Kapor_TV"
     };
   }
@@ -92,8 +97,12 @@ client.on("messageCreate", async (message) => {
 
     const formatted = list.map(id => `<@${id}>`).join("\n");
 
+    // 🔥 TITRE + FOOTER EN GRAS FORCÉ
+    const title = `**${data[guildId].settings.title}**`;
+    const footer = `**${data[guildId].settings.footer}**`;
+
     message.channel.send(
-      `${data[guildId].settings.title}\n\n${formatted}\n\n${data[guildId].settings.footer}`
+      `${title}\n\n${formatted}\n\n${footer}`
     );
   }
 
@@ -154,7 +163,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   // INIT SETTINGS (sécurité)
   if (!data[guildId].settings) {
     data[guildId].settings = {
-      title: "🎂 **ANNIVERSAIRES DE LA SEMAINE 📺**",
+      title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
       footer: "💜 Kapor_TV"
     };
   }
