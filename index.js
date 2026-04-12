@@ -4,7 +4,8 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  Events
+  Events,
+  PermissionsBitField
 } = require("discord.js");
 
 const sqlite3 = require("sqlite3").verbose();
@@ -18,7 +19,7 @@ const client = new Client({
   ]
 });
 
-// 💾 DB PERSISTANTE (IMPORTANT)
+// 💾 DB PERSISTANTE (Hostinger)
 const db = new sqlite3.Database("/home/u585460519/anniv.db");
 
 // 📦 TABLE
@@ -39,7 +40,7 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// ✅ BOT READY (debug anti double instance)
+// ✅ BOT READY
 client.once("ready", () => {
   console.log("🔥 BOT CONNECTÉ (INSTANCE UNIQUE)");
 });
@@ -87,9 +88,33 @@ client.on("messageCreate", async (message) => {
       }
     );
   }
+
+  // 🧹 RESET (ADMIN)
+  if (message.content === "!anniv_reset") {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ Tu n'as pas la permission !");
+    }
+
+    const week = getWeek();
+    const guildId = message.guild.id;
+
+    db.run(
+      "DELETE FROM anniversaires WHERE week=? AND guild=?",
+      [week, guildId],
+      function (err) {
+        if (err) {
+          return message.channel.send("❌ Erreur lors du reset");
+        }
+
+        message.channel.send(
+          "🧹 Liste des anniversaires réinitialisée pour cette semaine !"
+        );
+      }
+    );
+  }
 });
 
-// 🎯 BOUTON
+// 🎯 BOUTON INSCRIPTION
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
