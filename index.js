@@ -10,6 +10,27 @@ const {
 
 const fs = require("fs");
 
+// 💥 ANTI-CRASH GLOBAL
+process.on('uncaughtException', (err) => {
+  console.error('💥 Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (err) => {
+  console.error('💥 Unhandled Rejection:', err);
+});
+
+// 🔧 Logs Discord utiles
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
+});
+
+client.on('error', console.error);
+client.on('warn', console.warn);
+
 // 📁 FICHIER PERSISTANT
 const DATA_FILE = "/home/u585460519/anniv.json";
 
@@ -38,23 +59,22 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// 🚀 INIT BOT
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
-// ✅ READY
+// ✅ READY + HEARTBEAT
 client.once("ready", () => {
   console.log("🔥 BOT CONNECTÉ (VERSION FINALE)");
+  console.log("🚀 Bot démarré à :", new Date());
+
+  // 💓 HEARTBEAT
+  setInterval(() => {
+    console.log("💓 Bot toujours en vie :", new Date());
+  }, 300000);
 });
 
 // 📺 COMMANDES
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
+
+  console.log(`📨 Message reçu : ${message.content}`);
 
   const data = loadData();
   const week = getWeek();
@@ -97,7 +117,6 @@ client.on("messageCreate", async (message) => {
 
     const formatted = list.map(id => `<@${id}>`).join("\n");
 
-    // 🔥 TITRE + FOOTER EN GRAS FORCÉ
     const title = `**${data[guildId].settings.title}**`;
     const footer = `**${data[guildId].settings.footer}**`;
 
@@ -151,16 +170,16 @@ client.on("messageCreate", async (message) => {
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
+  console.log(`🔘 Interaction bouton par : ${interaction.user.tag}`);
+
   const data = loadData();
   const week = getWeek();
   const guildId = interaction.guild.id;
   const userId = interaction.user.id;
 
-  // INIT
   if (!data[guildId]) data[guildId] = {};
   if (!data[guildId][week]) data[guildId][week] = [];
 
-  // INIT SETTINGS (sécurité)
   if (!data[guildId].settings) {
     data[guildId].settings = {
       title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
@@ -168,7 +187,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     };
   }
 
-  // CHECK DOUBLON
   if (data[guildId][week].includes(userId)) {
     return interaction.reply({
       content: "⚠️ Déjà inscrit !",
@@ -176,7 +194,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
     });
   }
 
-  // AJOUT
   data[guildId][week].push(userId);
   saveData(data);
 
