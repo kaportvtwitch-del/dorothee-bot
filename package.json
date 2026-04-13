@@ -1,6 +1,7 @@
 {
   "name": "dorothee-bot",
   "version": "1.0.0",
+  "description": "Bot anniversaire Kapor_TV",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
