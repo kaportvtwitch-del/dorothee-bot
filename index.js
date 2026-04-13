@@ -10,10 +10,10 @@ const {
 
 const fs = require("fs");
 
-// 💾 FICHIER PERSISTANT
+// 💾 FICHIER
 const DATA_FILE = "/home/u585460519/anniv.json";
 
-// 📦 LOAD
+// LOAD
 function loadData() {
   try {
     if (!fs.existsSync(DATA_FILE)) return {};
@@ -24,12 +24,12 @@ function loadData() {
   }
 }
 
-// 💾 SAVE
+// SAVE
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// 🧠 SEMAINE
+// SEMAINE
 function getWeek() {
   const now = new Date();
   const year = now.getFullYear();
@@ -38,7 +38,7 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// 🚀 BOT
+// BOT
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -51,7 +51,7 @@ client.once("ready", () => {
   console.log("🔥 Dorothée Bot connecté !");
 });
 
-// 💬 COMMANDES
+// COMMANDES
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
 
@@ -62,7 +62,6 @@ client.on("messageCreate", async (message) => {
 
   if (!data[guildId]) data[guildId] = {};
 
-  // ⚙️ SETTINGS INIT
   if (!data[guildId].settings) {
     data[guildId].settings = {
       title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
@@ -114,7 +113,7 @@ client.on("messageCreate", async (message) => {
     );
   }
 
-  // 🎂 SET DATE (JJ/MM/AAAA)
+  // 🎂 SET DATE
   if (message.content.startsWith("!db_set ")) {
     const input = message.content.replace("!db_set ", "");
     const regex = /^\d{2}\/\d{2}\/\d{4}$/;
@@ -189,9 +188,38 @@ client.on("messageCreate", async (message) => {
 
     message.reply("🧹 Reset effectué !");
   }
+
+  // ℹ️ INFO
+  if (message.content === "!db_info") {
+    message.channel.send(
+`📺 **Dorothée Bot - Kapor_TV 💜**
+
+🎂 **Fonctionnalités :**
+• Inscription automatique aux anniversaires
+• Système VIP via bouton secret ✨
+• Gestion des rôles anniversaire 🎭
+• Calcul de l’âge automatique 🎉
+• Bonus spécial pour les dizaines 😄
+• Personnalisation par serveur
+
+📜 **Commandes :**
+\`!db_panel\`
+\`!db_list\`
+\`!db_set JJ/MM/AAAA\`
+\`!db_titre\`
+\`!db_message\`
+\`!db_role\`
+\`!db_reset\`
+\`!db_info\`
+
+🔗 https://discord.gg/Dyr6D3xnP9
+
+💜 Kapor_TV`
+    );
+  }
 });
 
-// 🎯 BOUTON (VIP)
+// 🎯 BOUTON VIP
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
@@ -219,7 +247,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   });
 });
 
-// ⏱ AUTO ANNIVERSAIRES
+// ⏱ AUTO ANNIV
 setInterval(() => {
   const data = loadData();
   const today = new Date();
@@ -272,5 +300,5 @@ setInterval(() => {
   saveData(data);
 }, 3600000);
 
-// 🔐 LOGIN
+// LOGIN
 client.login(process.env.DISCORD_TOKEN);
