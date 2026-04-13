@@ -10,10 +10,10 @@ const {
 
 const fs = require("fs");
 
-// 💾 DATA FILE
+// 💾 FICHIER PERSISTANT
 const DATA_FILE = "/home/u585460519/anniv.json";
 
-// LOAD
+// 📦 LOAD
 function loadData() {
   try {
     if (!fs.existsSync(DATA_FILE)) return {};
@@ -24,12 +24,12 @@ function loadData() {
   }
 }
 
-// SAVE
+// 💾 SAVE
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// WEEK
+// 🧠 SEMAINE
 function getWeek() {
   const now = new Date();
   const year = now.getFullYear();
@@ -38,7 +38,7 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// BOT
+// 🚀 BOT
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -62,7 +62,7 @@ client.on("messageCreate", async (message) => {
 
   if (!data[guildId]) data[guildId] = {};
 
-  // SETTINGS INIT
+  // ⚙️ SETTINGS INIT
   if (!data[guildId].settings) {
     data[guildId].settings = {
       title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
@@ -97,11 +97,16 @@ client.on("messageCreate", async (message) => {
     list.sort((a, b) => (b.vip || false) - (a.vip || false));
 
     const formatted = list
-      .map(u =>
-        u.vip
+      .map(u => {
+        let line = u.vip
           ? `✨🎉 <@${u.id}> 🎉✨`
-          : `<@${u.id}>`
-      )
+          : `<@${u.id}>`;
+
+        if (u.age) line += ` (${u.age} ans)`;
+        if (u.bonus) line += ` ${u.bonus}`;
+
+        return line;
+      })
       .join("\n");
 
     message.channel.send(
@@ -109,21 +114,27 @@ client.on("messageCreate", async (message) => {
     );
   }
 
-  // 🎂 SET DATE
+  // 🎂 SET DATE (JJ/MM/AAAA)
   if (message.content.startsWith("!db_set ")) {
-    const date = message.content.replace("!db_set ", "");
-    const regex = /^\d{2}\/\d{2}$/;
+    const input = message.content.replace("!db_set ", "");
+    const regex = /^\d{2}\/\d{2}\/\d{4}$/;
 
-    if (!regex.test(date)) {
-      return message.reply("❌ Format JJ/MM requis");
+    if (!regex.test(input)) {
+      return message.reply("❌ Format JJ/MM/AAAA requis");
     }
 
+    const [day, month, year] = input.split("/");
+
     if (!data[guildId].birthdays) data[guildId].birthdays = {};
-    data[guildId].birthdays[userId] = date;
+
+    data[guildId].birthdays[userId] = {
+      date: `${day}/${month}`,
+      year: parseInt(year)
+    };
 
     saveData(data);
 
-    message.reply(`🎉 Date enregistrée : ${date}`);
+    message.reply(`🎉 Date enregistrée : ${input}`);
   }
 
   // 🏷️ TITRE
@@ -180,7 +191,7 @@ client.on("messageCreate", async (message) => {
   }
 });
 
-// 🎯 BOUTON
+// 🎯 BOUTON (VIP)
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
 
@@ -208,7 +219,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   });
 });
 
-// ⏱ AUTO ANNIV
+// ⏱ AUTO ANNIVERSAIRES
 setInterval(() => {
   const data = loadData();
   const today = new Date();
@@ -216,6 +227,7 @@ setInterval(() => {
   const month = String(today.getMonth() + 1).padStart(2, "0");
   const todayStr = `${day}/${month}`;
   const week = getWeek();
+  const currentYear = today.getFullYear();
 
   for (const guildId in data) {
     const guildData = data[guildId];
@@ -227,9 +239,23 @@ setInterval(() => {
     if (!guild) continue;
 
     for (const userId in guildData.birthdays) {
-      if (guildData.birthdays[userId] === todayStr) {
+      const bday = guildData.birthdays[userId];
+
+      if (bday && bday.date === todayStr) {
         if (!guildData[week].find(u => u.id === userId)) {
-          guildData[week].push({ id: userId, vip: false });
+          const age = currentYear - bday.year;
+
+          let bonus = "";
+          if (age % 10 === 0) {
+            bonus = "🎉✨ (DIZAINE !) ✨🎉";
+          }
+
+          guildData[week].push({
+            id: userId,
+            vip: false,
+            age: age,
+            bonus: bonus
+          });
 
           const member = guild.members.cache.get(userId);
           const roleId = guildData.settings?.roleId;
