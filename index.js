@@ -10,47 +10,26 @@ const {
 
 const fs = require("fs");
 
-// 💥 ANTI-CRASH GLOBAL
-process.on('uncaughtException', (err) => {
-  console.error('💥 Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (err) => {
-  console.error('💥 Unhandled Rejection:', err);
-});
-
-// 🔧 Logs Discord utiles
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
-client.on('error', console.error);
-client.on('warn', console.warn);
-
-// 📁 FICHIER PERSISTANT
+// 💾 DATA FILE
 const DATA_FILE = "/home/u585460519/anniv.json";
 
-// 📦 INIT FICHIER SI ABSENT
-if (!fs.existsSync(DATA_FILE)) {
-  fs.writeFileSync(DATA_FILE, JSON.stringify({}, null, 2));
-}
-
-// 📦 LOAD DATA
+// LOAD
 function loadData() {
-  if (!fs.existsSync(DATA_FILE)) return {};
-  return JSON.parse(fs.readFileSync(DATA_FILE));
+  try {
+    if (!fs.existsSync(DATA_FILE)) return {};
+    return JSON.parse(fs.readFileSync(DATA_FILE));
+  } catch (e) {
+    console.error("Erreur JSON :", e);
+    return {};
+  }
 }
 
-// 💾 SAVE DATA
+// SAVE
 function saveData(data) {
   fs.writeFileSync(DATA_FILE, JSON.stringify(data, null, 2));
 }
 
-// 🧠 SEMAINE
+// WEEK
 function getWeek() {
   const now = new Date();
   const year = now.getFullYear();
@@ -59,40 +38,41 @@ function getWeek() {
   return `${year}-W${week}`;
 }
 
-// ✅ READY + HEARTBEAT
-client.once("ready", () => {
-  console.log("🔥 BOT CONNECTÉ (VERSION FINALE)");
-  console.log("🚀 Bot démarré à :", new Date());
-
-  // 💓 HEARTBEAT
-  setInterval(() => {
-    console.log("💓 Bot toujours en vie :", new Date());
-  }, 300000);
+// BOT
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-// 📺 COMMANDES
+client.once("ready", () => {
+  console.log("🔥 Dorothée Bot connecté !");
+});
+
+// 💬 COMMANDES
 client.on("messageCreate", async (message) => {
   if (message.author.bot) return;
-
-  console.log(`📨 Message reçu : ${message.content}`);
 
   const data = loadData();
   const week = getWeek();
   const guildId = message.guild.id;
+  const userId = message.author.id;
 
-  // INIT SERVEUR
   if (!data[guildId]) data[guildId] = {};
 
-  // INIT SETTINGS
+  // SETTINGS INIT
   if (!data[guildId].settings) {
     data[guildId].settings = {
       title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
-      footer: "💜 Kapor_TV"
+      footer: "💜 Kapor_TV",
+      roleId: null
     };
   }
 
   // 🎉 PANEL
-  if (message.content === "!anniv_panel") {
+  if (message.content === "!db_panel") {
     const button = new ButtonBuilder()
       .setCustomId("join_anniv")
       .setLabel("🎉 Je participe")
@@ -101,76 +81,108 @@ client.on("messageCreate", async (message) => {
     const row = new ActionRowBuilder().addComponents(button);
 
     message.channel.send({
-      content:
-        "🎂 **CLUB ANNIV DE LA SEMAINE 📺**\nClique pour rejoindre les anniversaires 💜🍆",
+      content: "🎂 Clique pour rejoindre les anniversaires !",
       components: [row]
     });
   }
 
   // 📋 LISTE
-  if (message.content === "!anniv_list") {
+  if (message.content === "!db_list") {
     const list = data[guildId][week] || [];
 
     if (list.length === 0) {
       return message.channel.send("📭 Aucun participant cette semaine");
     }
 
-    const formatted = list.map(id => `<@${id}>`).join("\n");
+    list.sort((a, b) => (b.vip || false) - (a.vip || false));
 
-    const title = `**${data[guildId].settings.title}**`;
-    const footer = `**${data[guildId].settings.footer}**`;
+    const formatted = list
+      .map(u =>
+        u.vip
+          ? `✨🎉 <@${u.id}> 🎉✨`
+          : `<@${u.id}>`
+      )
+      .join("\n");
 
     message.channel.send(
-      `${title}\n\n${formatted}\n\n${footer}`
+      `${data[guildId].settings.title}\n\n${formatted}\n\n${data[guildId].settings.footer}`
     );
   }
 
-  // 🏷️ CHANGER TITRE
-  if (message.content.startsWith("!anniv_titre ")) {
-    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return message.reply("❌ Permission refusée");
+  // 🎂 SET DATE
+  if (message.content.startsWith("!db_set ")) {
+    const date = message.content.replace("!db_set ", "");
+    const regex = /^\d{2}\/\d{2}$/;
+
+    if (!regex.test(date)) {
+      return message.reply("❌ Format JJ/MM requis");
     }
 
-    const newTitle = message.content.replace("!anniv_titre ", "");
+    if (!data[guildId].birthdays) data[guildId].birthdays = {};
+    data[guildId].birthdays[userId] = date;
 
-    data[guildId].settings.title = newTitle;
     saveData(data);
 
-    message.reply("✅ Titre mis à jour !");
+    message.reply(`🎉 Date enregistrée : ${date}`);
   }
 
-  // 💬 CHANGER MESSAGE BAS
-  if (message.content.startsWith("!anniv_message ")) {
+  // 🏷️ TITRE
+  if (message.content.startsWith("!db_titre ")) {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
       return message.reply("❌ Permission refusée");
     }
 
-    const newFooter = message.content.replace("!anniv_message ", "");
-
-    data[guildId].settings.footer = newFooter;
+    data[guildId].settings.title = message.content.replace("!db_titre ", "");
     saveData(data);
 
-    message.reply("✅ Message mis à jour !");
+    message.reply("✅ Titre modifié !");
+  }
+
+  // 💬 MESSAGE
+  if (message.content.startsWith("!db_message ")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ Permission refusée");
+    }
+
+    data[guildId].settings.footer = message.content.replace("!db_message ", "");
+    saveData(data);
+
+    message.reply("✅ Message modifié !");
+  }
+
+  // 🎭 ROLE
+  if (message.content.startsWith("!db_role ")) {
+    if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+      return message.reply("❌ Permission refusée");
+    }
+
+    const roleId = message.content.replace("!db_role ", "").replace(/[<@&>]/g, "");
+    const role = message.guild.roles.cache.get(roleId);
+
+    if (!role) return message.reply("❌ Rôle invalide");
+
+    data[guildId].settings.roleId = roleId;
+    saveData(data);
+
+    message.reply(`✅ Rôle défini : <@&${roleId}>`);
   }
 
   // 🧹 RESET
-  if (message.content === "!anniv_reset") {
+  if (message.content === "!db_reset") {
     if (!message.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-      return message.reply("❌ Tu n'as pas la permission !");
+      return message.reply("❌ Permission refusée");
     }
 
     data[guildId][week] = [];
     saveData(data);
 
-    message.channel.send("🧹 Liste réinitialisée !");
+    message.reply("🧹 Reset effectué !");
   }
 });
 
 // 🎯 BOUTON
 client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isButton()) return;
-
-  console.log(`🔘 Interaction bouton par : ${interaction.user.tag}`);
 
   const data = loadData();
   const week = getWeek();
@@ -180,28 +192,59 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!data[guildId]) data[guildId] = {};
   if (!data[guildId][week]) data[guildId][week] = [];
 
-  if (!data[guildId].settings) {
-    data[guildId].settings = {
-      title: "🎂 ANNIVERSAIRES DE LA SEMAINE 📺",
-      footer: "💜 Kapor_TV"
-    };
+  let user = data[guildId][week].find(u => u.id === userId);
+
+  if (user) {
+    user.vip = true;
+  } else {
+    data[guildId][week].push({ id: userId, vip: true });
   }
 
-  if (data[guildId][week].includes(userId)) {
-    return interaction.reply({
-      content: "⚠️ Déjà inscrit !",
-      ephemeral: true
-    });
-  }
-
-  data[guildId][week].push(userId);
   saveData(data);
 
   interaction.reply({
-    content: "🎉 Inscrit au Club Anniv !",
+    content: "✨ Mode VIP activé !",
     ephemeral: true
   });
 });
+
+// ⏱ AUTO ANNIV
+setInterval(() => {
+  const data = loadData();
+  const today = new Date();
+  const day = String(today.getDate()).padStart(2, "0");
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const todayStr = `${day}/${month}`;
+  const week = getWeek();
+
+  for (const guildId in data) {
+    const guildData = data[guildId];
+    if (!guildData.birthdays) continue;
+
+    if (!guildData[week]) guildData[week] = [];
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) continue;
+
+    for (const userId in guildData.birthdays) {
+      if (guildData.birthdays[userId] === todayStr) {
+        if (!guildData[week].find(u => u.id === userId)) {
+          guildData[week].push({ id: userId, vip: false });
+
+          const member = guild.members.cache.get(userId);
+          const roleId = guildData.settings?.roleId;
+
+          if (member && roleId) {
+            const role = guild.roles.cache.get(roleId);
+            if (role) member.roles.add(role).catch(console.error);
+          }
+        }
+      }
+    }
+  }
+
+  saveData(data);
+}, 3600000);
 
 // 🔐 LOGIN
 client.login(process.env.DISCORD_TOKEN);
