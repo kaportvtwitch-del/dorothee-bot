@@ -5,6 +5,8 @@ const db = require('./database/db');
 
 const TOKEN = process.env.TOKEN;
 
+/* ===================== CLIENT ===================== */
+
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -14,42 +16,102 @@ const client = new Client({
 
 client.commands = new Collection();
 
-/* ================= LOAD COMMANDS ================= */
+/* ===================== LOAD COMMANDS ===================== */
 
-for (const file of fs.readdirSync('./commands')) {
-  if (!file.endsWith('.js')) continue;
+try {
+  const commandFiles = fs.readdirSync('./commands');
 
-  const cmd = require(`./commands/${file}`);
-  client.commands.set(cmd.data.name, cmd);
+  for (const file of commandFiles) {
+    if (!file.endsWith('.js')) continue;
+
+    const cmd = require(`./commands/${file}`);
+    client.commands.set(cmd.data.name, cmd);
+  }
+
+  console.log(`📦 ${client.commands.size} commandes chargées`);
+} catch (err) {
+  console.error("❌ ERREUR LOAD COMMANDS:", err);
 }
 
-/* ================= READY ================= */
+/* ===================== READY ===================== */
 
 client.once('ready', () => {
-  console.log(`✅ Connecté : ${client.user.tag}`);
+  console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
 
-  const { startBirthdayJob } = require('./services/birthdayService');
-  startBirthdayJob(client);
+  // Lancement système anniversaire
+  try {
+    const { startBirthdayJob } = require('./services/birthdayService');
+    startBirthdayJob(client);
+    console.log("🎂 Birthday system ON");
+  } catch (err) {
+    console.error("❌ Birthday system error:", err);
+  }
 });
 
-/* ================= INTERACTIONS ================= */
+/* ===================== INTERACTIONS ===================== */
 
 client.on('interactionCreate', async (interaction) => {
 
-  if (!interaction.guild) return;
+  try {
 
-  // init guild auto
-  db.initGuild(interaction.guild.id);
+    if (!interaction.guild) return;
 
-  if (interaction.isChatInputCommand()) {
-    const cmd = client.commands.get(interaction.commandName);
-    if (cmd) return cmd.execute(interaction);
-  }
+    // init guild auto (multi-serveur safe)
+    db.initGuild(interaction.guild.id);
 
-  if (interaction.isButton()) {
-    const { handleButtons } = require('./services/buttonHandler');
-    return handleButtons(interaction);
+    /* ================= SLASH COMMANDS ================= */
+
+    if (interaction.isChatInputCommand()) {
+
+      const cmd = client.commands.get(interaction.commandName);
+
+      if (!cmd) {
+        return interaction.reply({
+          content: "❌ Commande introuvable",
+          ephemeral: true
+        });
+      }
+
+      return await cmd.execute(interaction);
+    }
+
+    /* ================= BUTTONS ================= */
+
+    if (interaction.isButton()) {
+
+      const { handleButtons } = require('./services/buttonHandler');
+      return await handleButtons(interaction);
+    }
+
+  } catch (err) {
+    console.error("💥 INTERACTION ERROR:", err);
+
+    if (interaction.replied || interaction.deferred) return;
+
+    return interaction.reply({
+      content: "❌ Une erreur est survenue.",
+      ephemeral: true
+    }).catch(() => {});
   }
 });
 
-client.login(TOKEN);
+/* ===================== LOGIN ===================== */
+
+client.login(TOKEN)
+  .then(() => {
+    console.log("🔐 Login Discord OK");
+  })
+  .catch(err => {
+    console.error("❌ LOGIN FAILED:", err);
+  });
+
+/* ===================== GLOBAL SAFETY ===================== */
+
+// sécurité crash non catché
+process.on('unhandledRejection', (err) => {
+  console.error("⚠️ UNHANDLED REJECTION:", err);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error("⚠️ UNCAUGHT EXCEPTION:", err);
+});
