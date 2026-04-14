@@ -1,10 +1,10 @@
 {
   "name": "dorothee-bot",
   "version": "1.0.0",
+  "description": "Bot anniversaire KaporTV",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "deploy": "node deploy-commands.js"
+    "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.11.1",
