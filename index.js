@@ -19,27 +19,40 @@ const {
 
 const sqlite3 = require("sqlite3").verbose();
 
+// =======================
+// CLIENT
+// =======================
+
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
-const db = new sqlite3.Database("./anniv.db");
-
 // =======================
-// DB
+// DATABASE (HOSTINGER SAFE)
 // =======================
 
-db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
-db.run(`CREATE TABLE IF NOT EXISTS vip (guild TEXT, user TEXT)`);
-db.run(`CREATE TABLE IF NOT EXISTS settings (
-  guild TEXT PRIMARY KEY,
-  titre TEXT,
-  message TEXT,
-  message_vip TEXT,
-  panel TEXT,
-  bouton TEXT,
-  role TEXT
-)`);
+const db = new sqlite3.Database("/tmp/anniv.db");
+
+db.on("error", (err) => {
+  console.error("❌ DB ERROR:", err);
+});
+
+db.serialize(() => {
+  db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
+  db.run(`CREATE TABLE IF NOT EXISTS vip (guild TEXT, user TEXT)`);
+  db.run(`CREATE TABLE IF NOT EXISTS settings (
+    guild TEXT PRIMARY KEY,
+    titre TEXT,
+    message TEXT,
+    message_vip TEXT,
+    panel TEXT,
+    bouton TEXT,
+    role TEXT
+  )`);
+});
 
 // =======================
 // COMMANDES
@@ -52,13 +65,22 @@ const commands = [
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-client.once("ready", async () => {
-  console.log(`✅ ${client.user.tag}`);
+// =======================
+// READY
+// =======================
 
-  await rest.put(
-    Routes.applicationCommands(process.env.CLIENT_ID),
-    { body: commands }
-  );
+client.once("ready", async () => {
+  console.log(`✅ BOT CONNECTÉ : ${client.user.tag}`);
+
+  try {
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    );
+    console.log("✅ COMMANDES DÉPLOYÉES");
+  } catch (err) {
+    console.error("❌ DEPLOY COMMANDES:", err);
+  }
 
   setInterval(checkBirthdays, 60000);
 });
@@ -80,6 +102,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.isChatInputCommand()) {
 
       if (interaction.commandName === "db_menu") {
+
         return interaction.reply({
           content: "🎂 Menu",
           ephemeral: true,
@@ -99,6 +122,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
+
+          if (err) return safeReply(interaction, "❌ DB erreur");
 
           const text = config?.panel || "🎉 Clique pour t'inscrire";
           const btn = config?.bouton || "🎂 Participer";
@@ -123,7 +148,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isButton()) {
 
-      // DATE
       if (interaction.customId === "date" || interaction.customId === "vip") {
 
         if (interaction.customId === "vip") {
@@ -144,7 +168,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.showModal(modal);
       }
 
-      // ADMIN
       if (interaction.customId === "admin") {
 
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -156,70 +179,39 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId("list").setLabel("📺 Liste").setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId("title").setLabel("✏️ Titre"),
-              new ButtonBuilder().setCustomId("msg").setLabel("📝 Message"),
-              new ButtonBuilder().setCustomId("vipmsg").setLabel("💎 VIP"),
-              new ButtonBuilder().setCustomId("panel").setLabel("🧾 Panel"),
-              new ButtonBuilder().setCustomId("btn").setLabel("🔘 Bouton"),
+              new ButtonBuilder().setCustomId("list").setLabel("📺 Liste"),
               new ButtonBuilder().setCustomId("role").setLabel("🎭 Rôle")
             )
           ]
         });
       }
 
-      // LISTE
       if (interaction.customId === "list") {
 
-        return interaction.reply({ content: "⏳ Chargement...", ephemeral: true }).then(() => {
+        await interaction.deferReply({ ephemeral: true });
 
-          db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
+        db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
-            db.all("SELECT user FROM vip WHERE guild=?", [guildId], (err, vips) => {
+          if (err) return interaction.editReply("❌ DB erreur");
 
-              const vipIds = vips.map(v => v.user);
+          if (!rows.length) return interaction.editReply("📭 Vide");
 
-              let vipList = [];
-              let normal = [];
+          const list = rows.map(r => `<@${r.user}> → ${r.date}`).join("\n");
 
-              rows.forEach(r => {
-                const line = `<@${r.user}> → ${r.date}`;
-
-                if (vipIds.includes(r.user)) {
-                  vipList.push(`✨ ${line} ✨`);
-                } else {
-                  normal.push(line);
-                }
-              });
-
-              db.get("SELECT message_vip FROM settings WHERE guild=?", [guildId], (err, config) => {
-
-                const vipMsg = config?.message_vip || "💎 VIP 💎";
-
-                const final =
-                  (vipList.length ? `${vipMsg}\n\n${vipList.join("\n")}\n\n` : "") +
-                  (normal.length ? normal.join("\n") : "📭 Vide");
-
-                interaction.editReply(final);
-              });
-            });
-          });
+          interaction.editReply(list);
         });
       }
 
-      // MODALS ADMIN
-      const modals = ["title", "msg", "vipmsg", "panel", "btn", "role"];
-
-      if (modals.includes(interaction.customId)) {
+      if (interaction.customId === "role") {
 
         const modal = new ModalBuilder()
-          .setCustomId(interaction.customId + "_modal")
-          .setTitle("Modifier");
+          .setCustomId("role_modal")
+          .setTitle("ID du rôle");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel("Valeur")
-          .setStyle(TextInputStyle.Paragraph);
+          .setLabel("Colle ID rôle")
+          .setStyle(TextInputStyle.Short);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
 
@@ -242,37 +234,47 @@ client.on(Events.InteractionCreate, async (interaction) => {
         db.run(
           "INSERT OR REPLACE INTO anniversaires VALUES (?, ?, ?)",
           [guildId, interaction.user.id, value],
-          () => interaction.editReply("🎉 Enregistré !")
+          (err) => {
+            if (err) return interaction.editReply("❌ DB erreur");
+            interaction.editReply("🎉 Date enregistrée !");
+          }
         );
 
         return;
       }
 
-      const map = {
-        title_modal: "titre",
-        msg_modal: "message",
-        vipmsg_modal: "message_vip",
-        panel_modal: "panel",
-        btn_modal: "bouton",
-        role_modal: "role"
-      };
+      if (interaction.customId === "role_modal") {
 
-      const field = map[interaction.customId];
-
-      if (field) {
         db.run(
-          `INSERT INTO settings (guild, ${field}) VALUES (?, ?) 
-           ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
+          `INSERT INTO settings (guild, role) VALUES (?, ?) 
+           ON CONFLICT(guild) DO UPDATE SET role=?`,
           [guildId, value, value],
-          () => interaction.editReply("✅ Modifié")
+          () => interaction.editReply("✅ Rôle enregistré")
         );
+
+        return;
       }
     }
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ ERREUR:", err);
+    safeReply(interaction, "❌ Erreur interne");
   }
 });
+
+// =======================
+// SAFE REPLY
+// =======================
+
+function safeReply(interaction, msg) {
+  try {
+    if (interaction.deferred || interaction.replied) {
+      interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
+    } else {
+      interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
+    }
+  } catch {}
+}
 
 // =======================
 // ANNIV AUTO
