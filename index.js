@@ -25,10 +25,19 @@ try {
     if (!file.endsWith('.js')) continue;
 
     const cmd = require(`./commands/${file}`);
+
+    // sécurité anti crash
+    if (!cmd.data || !cmd.data.name) {
+      console.log(`⚠️ Commande ignorée (mal formée): ${file}`);
+      continue;
+    }
+
     client.commands.set(cmd.data.name, cmd);
+    console.log(`✅ Commande chargée: ${cmd.data.name}`);
   }
 
-  console.log(`📦 ${client.commands.size} commandes chargées`);
+  console.log(`📦 Total commandes chargées: ${client.commands.size}`);
+
 } catch (err) {
   console.error("❌ ERREUR LOAD COMMANDS:", err);
 }
@@ -56,7 +65,7 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!interaction.guild) return;
 
-    // init guild auto (multi-serveur safe)
+    // init config serveur
     db.initGuild(interaction.guild.id);
 
     /* ================= SLASH COMMANDS ================= */
@@ -66,6 +75,7 @@ client.on('interactionCreate', async (interaction) => {
       const cmd = client.commands.get(interaction.commandName);
 
       if (!cmd) {
+        console.log(`❌ Commande non trouvée: ${interaction.commandName}`);
         return interaction.reply({
           content: "❌ Commande introuvable",
           ephemeral: true
@@ -107,7 +117,6 @@ client.login(TOKEN)
 
 /* ===================== GLOBAL SAFETY ===================== */
 
-// sécurité crash non catché
 process.on('unhandledRejection', (err) => {
   console.error("⚠️ UNHANDLED REJECTION:", err);
 });
