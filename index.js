@@ -20,28 +20,15 @@ const {
 const sqlite3 = require("sqlite3").verbose();
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 // DB
 const db = new sqlite3.Database("/home/u585460519/data/anniv.db");
 
 // TABLES
-db.run(`
-CREATE TABLE IF NOT EXISTS anniversaires (
-  guild TEXT,
-  user TEXT,
-  date TEXT
-)
-`);
-
-db.run(`
-CREATE TABLE IF NOT EXISTS settings (
-  guild TEXT PRIMARY KEY,
-  titre TEXT,
-  message TEXT
-)
-`);
+db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
+db.run(`CREATE TABLE IF NOT EXISTS settings (guild TEXT PRIMARY KEY, titre TEXT, message TEXT, role TEXT)`);
 
 // =======================
 // COMMANDES
@@ -49,30 +36,29 @@ CREATE TABLE IF NOT EXISTS settings (
 
 const commands = [
   new SlashCommandBuilder().setName("db_menu").setDescription("🎂 Menu"),
-  new SlashCommandBuilder().setName("db_list").setDescription("📺 Liste"),
-  new SlashCommandBuilder().setName("db_reset").setDescription("🧹 Reset")
+  new SlashCommandBuilder().setName("db_panel").setDescription("📨 Envoyer le panel"),
+  new SlashCommandBuilder().setName("db_reset").setDescription("🧹 Reset"),
+  new SlashCommandBuilder().setName("db_role").setDescription("🎭 Définir rôle")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// READY + DEPLOY
 client.once("ready", async () => {
   console.log(`✅ Connecté : ${client.user.tag}`);
 
-  try {
-    console.log("🔄 Déploiement...");
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("✅ Commandes OK");
-  } catch (err) {
-    console.error(err);
-  }
+  await rest.put(
+    Routes.applicationCommands(process.env.CLIENT_ID),
+    { body: commands }
+  );
+
+  console.log("✅ Commandes déployées");
+
+  // CHECK ANNIV (toutes les minutes)
+  setInterval(checkBirthdays, 60000);
 });
 
 // =======================
-// INTERACTIONS
+// MENU
 // =======================
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -85,45 +71,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isChatInputCommand()) {
 
-    // MENU
+    // MENU USER
     if (interaction.commandName === "db_menu") {
 
       const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("menu_list").setLabel("📺 Liste").setStyle(ButtonStyle.Primary),
-        new ButtonBuilder().setCustomId("menu_date").setLabel("🎂 Ma date").setStyle(ButtonStyle.Success),
-        new ButtonBuilder().setCustomId("menu_title").setLabel("✏️ Titre").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("menu_msg").setLabel("📝 Message").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("menu_close").setLabel("❌").setStyle(ButtonStyle.Danger)
+        new ButtonBuilder().setCustomId("date").setLabel("🎂 Ma date").setStyle(ButtonStyle.Success),
+        new ButtonBuilder().setCustomId("admin").setLabel("⚙️ Gestion").setStyle(ButtonStyle.Secondary)
       );
 
-      interaction.reply({
-        content: "🎂 **MENU DOROTHÉE 📺**",
+      return interaction.reply({
+        content: "🎂 **Club Dorothée - Anniversaires 📺**",
         components: [row],
         ephemeral: true
       });
     }
 
-    // LISTE
-    if (interaction.commandName === "db_list") {
+    // PANEL (ADMIN)
+    if (interaction.commandName === "db_panel") {
 
-      db.all("SELECT user, date FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
+      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
+      }
 
-        if (!rows?.length) {
-          return interaction.reply({ content: "📭 Vide", ephemeral: true });
-        }
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("date").setLabel("🎂 Je m'inscris").setStyle(ButtonStyle.Success)
+      );
 
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
-
-          const titre = config?.titre || "🎂 ANNIVERSAIRES 📺";
-          const msg = config?.message || "💜 Kapor_TV";
-
-          const list = rows.map(r => `<@${r.user}> → ${r.date}`).join("\n");
-
-          interaction.reply({
-            content: `${titre}\n\n${list}\n\n${msg}`,
-            ephemeral: true
-          });
-        });
+      return interaction.channel.send({
+        content: "🎉 Clique pour participer aux anniversaires !",
+        components: [row]
       });
     }
 
@@ -131,12 +107,29 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (interaction.commandName === "db_reset") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({ content: "❌ Admin only", ephemeral: true });
+        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
       db.run("DELETE FROM anniversaires WHERE guild=?", [guildId]);
 
-      interaction.reply({ content: "🧹 Reset OK", ephemeral: true });
+      return interaction.reply({ content: "🧹 Reset OK", ephemeral: true });
+    }
+
+    // ROLE
+    if (interaction.commandName === "db_role") {
+
+      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
+      }
+
+      const role = interaction.options.getRole("role");
+
+      db.run(
+        "INSERT INTO settings (guild, role) VALUES (?, ?) ON CONFLICT(guild) DO UPDATE SET role=?",
+        [guildId, role.id, role.id]
+      );
+
+      return interaction.reply({ content: "🎭 Rôle enregistré", ephemeral: true });
     }
   }
 
@@ -146,46 +139,47 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isButton()) {
 
-    // LISTE
-    if (interaction.customId === "menu_list") {
-
-      await interaction.deferReply({ ephemeral: true });
-
-      db.all("SELECT user, date FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
-
-        const list = rows?.map(r => `<@${r.user}> → ${r.date}`).join("\n") || "📭 Vide";
-
-        interaction.editReply({ content: `📺 LISTE\n\n${list}` });
-      });
-    }
-
-    // MODAL DATE
-    if (interaction.customId === "menu_date") {
+    // DATE MODAL
+    if (interaction.customId === "date") {
 
       const modal = new ModalBuilder()
-        .setCustomId("modal_date")
-        .setTitle("🎂 Ta date");
+        .setCustomId("date_modal")
+        .setTitle("🎂 Ta date (JJ/MM/AAAA)");
 
       const input = new TextInputBuilder()
         .setCustomId("date_input")
-        .setLabel("JJ/MM")
-        .setStyle(TextInputStyle.Short);
+        .setLabel("Ex: 15/08/1998")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true);
 
       modal.addComponents(new ActionRowBuilder().addComponents(input));
 
       return interaction.showModal(modal);
     }
 
-    // MODAL TITRE (ADMIN)
-    if (interaction.customId === "menu_title") {
+    // ADMIN MENU
+    if (interaction.customId === "admin") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
-      const modal = new ModalBuilder()
-        .setCustomId("modal_title")
-        .setTitle("Modifier le titre");
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("title").setLabel("✏️ Titre").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("msg").setLabel("📝 Message").setStyle(ButtonStyle.Secondary)
+      );
+
+      return interaction.reply({
+        content: "⚙️ Gestion du bot",
+        components: [row],
+        ephemeral: true
+      });
+    }
+
+    // TITRE
+    if (interaction.customId === "title") {
+
+      const modal = new ModalBuilder().setCustomId("title_modal").setTitle("Modifier titre");
 
       const input = new TextInputBuilder()
         .setCustomId("title_input")
@@ -197,16 +191,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.showModal(modal);
     }
 
-    // MODAL MESSAGE (ADMIN)
-    if (interaction.customId === "menu_msg") {
+    // MESSAGE
+    if (interaction.customId === "msg") {
 
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
-      }
-
-      const modal = new ModalBuilder()
-        .setCustomId("modal_msg")
-        .setTitle("Modifier le message");
+      const modal = new ModalBuilder().setCustomId("msg_modal").setTitle("Modifier message");
 
       const input = new TextInputBuilder()
         .setCustomId("msg_input")
@@ -217,11 +205,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       return interaction.showModal(modal);
     }
-
-    // CLOSE
-    if (interaction.customId === "menu_close") {
-      return interaction.update({ content: "❌ Fermé", components: [] });
-    }
   }
 
   // =======================
@@ -230,24 +213,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   if (interaction.isModalSubmit()) {
 
+    const userId = interaction.user.id;
+
     // DATE
-    if (interaction.customId === "modal_date") {
+    if (interaction.customId === "date_modal") {
 
       const date = interaction.fields.getTextInputValue("date_input");
 
       db.run(
         "INSERT OR REPLACE INTO anniversaires (guild, user, date) VALUES (?, ?, ?)",
-        [guildId, interaction.user.id, date]
+        [guildId, userId, date]
       );
 
-      return interaction.reply({
-        content: `🎉 Date enregistrée : ${date}`,
-        ephemeral: true
-      });
+      return interaction.reply({ content: "🎉 Date enregistrée !", ephemeral: true });
     }
 
     // TITRE
-    if (interaction.customId === "modal_title") {
+    if (interaction.customId === "title_modal") {
 
       const titre = interaction.fields.getTextInputValue("title_input");
 
@@ -256,14 +238,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         [guildId, titre, titre]
       );
 
-      return interaction.reply({
-        content: "✅ Titre mis à jour",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ Titre modifié", ephemeral: true });
     }
 
     // MESSAGE
-    if (interaction.customId === "modal_msg") {
+    if (interaction.customId === "msg_modal") {
 
       const msg = interaction.fields.getTextInputValue("msg_input");
 
@@ -272,13 +251,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
         [guildId, msg, msg]
       );
 
-      return interaction.reply({
-        content: "✅ Message mis à jour",
-        ephemeral: true
-      });
+      return interaction.reply({ content: "✅ Message modifié", ephemeral: true });
     }
   }
 });
 
-// LOGIN
+// =======================
+// CHECK ANNIVERSAIRES
+// =======================
+
+async function checkBirthdays() {
+
+  const today = new Date();
+  const todayStr = `${today.getDate()}/${today.getMonth() + 1}`;
+
+  db.all("SELECT * FROM anniversaires", async (err, rows) => {
+
+    for (const row of rows) {
+
+      const [d, m, y] = row.date.split("/");
+
+      if (`${d}/${m}` === todayStr) {
+
+        const guild = await client.guilds.fetch(row.guild);
+        const member = await guild.members.fetch(row.user);
+
+        db.get("SELECT role FROM settings WHERE guild=?", [row.guild], async (err, config) => {
+
+          if (!config?.role) return;
+
+          const role = guild.roles.cache.get(config.role);
+          if (!role) return;
+
+          await member.roles.add(role);
+
+          const age = new Date().getFullYear() - y;
+
+          let bonus = "";
+          if (age % 10 === 0) {
+            bonus = `🎉 IL PASSE UNE DIZAINE (${age}) !!!`;
+          }
+
+          member.send(`🎂 Joyeux anniversaire ! ${bonus}`);
+        });
+      }
+    }
+  });
+}
+
 client.login(process.env.DISCORD_TOKEN);
