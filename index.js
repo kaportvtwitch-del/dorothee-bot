@@ -30,14 +30,8 @@ const db = new sqlite3.Database("./anniv.db");
 // =======================
 
 db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
-db.run(`CREATE TABLE IF NOT EXISTS vip (guild TEXT, user TEXT)`);
 db.run(`CREATE TABLE IF NOT EXISTS settings (
   guild TEXT PRIMARY KEY,
-  titre TEXT,
-  message TEXT,
-  message_vip TEXT,
-  bouton TEXT,
-  panel TEXT,
   role TEXT
 )`);
 
@@ -46,8 +40,7 @@ db.run(`CREATE TABLE IF NOT EXISTS settings (
 // =======================
 
 const commands = [
-  new SlashCommandBuilder().setName("db_menu").setDescription("🎂 Menu"),
-  new SlashCommandBuilder().setName("db_panel").setDescription("📨 Envoyer panel")
+  new SlashCommandBuilder().setName("db_menu").setDescription("🎂 Menu anniversaire"),
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
@@ -80,7 +73,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
 
     // =======================
-    // COMMANDES
+    // COMMANDE
     // =======================
 
     if (interaction.isChatInputCommand()) {
@@ -88,39 +81,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
       if (interaction.commandName === "db_menu") {
 
         return interaction.reply({
-          content: "🎂 Menu Anniversaire",
+          content: "🎂 Menu",
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
               new ButtonBuilder().setCustomId("date").setLabel("🎂 Ma date").setStyle(ButtonStyle.Success),
-              new ButtonBuilder().setCustomId("admin").setLabel("⚙️ Gestion").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("close").setLabel("❌").setStyle(ButtonStyle.Danger)
+              new ButtonBuilder().setCustomId("admin").setLabel("⚙️ Gestion").setStyle(ButtonStyle.Secondary)
             )
           ]
-        });
-      }
-
-      if (interaction.commandName === "db_panel") {
-
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
-        }
-
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
-
-          const bouton = config?.bouton || "🎂 Je participe";
-          const panel = config?.panel || "🎉 Clique pour t'inscrire !";
-
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("vip_date").setLabel(bouton).setStyle(ButtonStyle.Success)
-          );
-
-          interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
-
-          interaction.channel.send({
-            content: panel,
-            components: [row]
-          });
         });
       }
     }
@@ -131,30 +99,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isButton()) {
 
-      if (interaction.customId === "close") {
-        return interaction.update({ content: "❌ Fermé", components: [] });
-      }
-
-      if (interaction.customId === "date" || interaction.customId === "vip_date") {
-
-        if (interaction.customId === "vip_date") {
-          db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
-        }
+      // 🎂 DATE
+      if (interaction.customId === "date") {
 
         const modal = new ModalBuilder()
           .setCustomId("date_modal")
-          .setTitle("🎂 Date JJ/MM/AAAA");
+          .setTitle("🎂 Date anniversaire");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel("Ex: 15/08/1998")
+          .setLabel("Format JJ/MM/AAAA")
           .setStyle(TextInputStyle.Short);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
 
-        return interaction.showModal(modal);
+        return interaction.showModal(modal); // ✅ PAS DE REPLY ICI
       }
 
+      // ⚙️ ADMIN
       if (interaction.customId === "admin") {
 
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -166,77 +128,42 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId("list").setLabel("📺 Liste").setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId("title").setLabel("✏️ Titre").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("msg").setLabel("📝 Message").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("vipmsg").setLabel("💎 Message VIP").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("panel").setLabel("🧾 Panel").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("btn").setLabel("🔘 Bouton").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("role").setLabel("🎭 Rôle").setStyle(ButtonStyle.Secondary),
-              new ButtonBuilder().setCustomId("close").setLabel("❌").setStyle(ButtonStyle.Danger)
+              new ButtonBuilder().setCustomId("list").setLabel("📺 Voir liste").setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId("role").setLabel("🎭 Définir rôle").setStyle(ButtonStyle.Secondary)
             )
           ]
         });
       }
 
+      // 📺 LISTE
       if (interaction.customId === "list") {
 
         return interaction.reply({ content: "⏳ Chargement...", ephemeral: true }).then(() => {
 
           db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
-            db.all("SELECT user FROM vip WHERE guild=?", [guildId], (err, vips) => {
+            if (!rows.length) {
+              return interaction.editReply("📭 Aucune donnée");
+            }
 
-              const vipIds = vips.map(v => v.user);
+            const list = rows.map(r => `<@${r.user}> → ${r.date}`).join("\n");
 
-              let vipList = [];
-              let normalList = [];
-
-              rows.forEach(r => {
-                const line = `<@${r.user}> → ${r.date}`;
-
-                if (vipIds.includes(r.user)) {
-                  vipList.push(`✨ ${line} ✨`);
-                } else {
-                  normalList.push(line);
-                }
-              });
-
-              db.get("SELECT message_vip FROM settings WHERE guild=?", [guildId], (err, config) => {
-
-                const vipMsg = config?.message_vip || "💎 VIP DU JOUR 💎";
-
-                const final =
-                  (vipList.length ? `${vipMsg}\n\n${vipList.join("\n")}\n\n` : "") +
-                  (normalList.length ? normalList.join("\n") : "📭 Vide");
-
-                interaction.editReply(final);
-              });
-            });
+            interaction.editReply(list);
           });
         });
       }
 
-      // MODALS
-      const modalMap = {
-        title: "Titre",
-        msg: "Message",
-        vipmsg: "Message VIP",
-        panel: "Texte panel",
-        btn: "Texte bouton",
-        role: "ID rôle"
-      };
-
-      if (modalMap[interaction.customId]) {
+      // 🎭 ROLE
+      if (interaction.customId === "role") {
 
         const modal = new ModalBuilder()
-          .setCustomId(interaction.customId + "_modal")
-          .setTitle(modalMap[interaction.customId]);
+          .setCustomId("role_modal")
+          .setTitle("ID du rôle");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel(modalMap[interaction.customId])
-          .setStyle(TextInputStyle.Paragraph);
+          .setLabel("Colle l'ID du rôle")
+          .setStyle(TextInputStyle.Short);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
 
@@ -245,18 +172,17 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
     // =======================
-    // MODALS SAVE
+    // MODALS
     // =======================
 
     if (interaction.isModalSubmit()) {
 
       const value = interaction.fields.getTextInputValue("input");
 
-      await interaction.reply({
-        content: "⏳ Traitement...",
-        ephemeral: true
-      });
+      // ✅ OBLIGATOIRE pour éviter le bug
+      await interaction.deferReply({ ephemeral: true });
 
+      // 🎂 DATE
       if (interaction.customId === "date_modal") {
 
         db.run(
@@ -264,35 +190,34 @@ client.on(Events.InteractionCreate, async (interaction) => {
           [guildId, interaction.user.id, value],
           (err) => {
             if (err) return interaction.editReply("❌ Erreur DB");
-            interaction.editReply("🎉 Date enregistrée !");
+
+            return interaction.editReply("🎉 Date enregistrée !");
           }
         );
+
         return;
       }
 
-      const map = {
-        title_modal: "titre",
-        msg_modal: "message",
-        vipmsg_modal: "message_vip",
-        panel_modal: "panel",
-        btn_modal: "bouton",
-        role_modal: "role"
-      };
+      // 🎭 ROLE
+      if (interaction.customId === "role_modal") {
 
-      const field = map[interaction.customId];
-
-      if (field) {
         db.run(
-          `INSERT INTO settings (guild, ${field}) VALUES (?, ?) 
-           ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
+          `INSERT INTO settings (guild, role) VALUES (?, ?) 
+           ON CONFLICT(guild) DO UPDATE SET role=?`,
           [guildId, value, value],
-          () => interaction.editReply("✅ Modifié")
+          () => interaction.editReply("✅ Rôle enregistré")
         );
+
+        return;
       }
     }
 
   } catch (err) {
     console.error(err);
+
+    if (!interaction.replied) {
+      interaction.reply({ content: "❌ Erreur", ephemeral: true });
+    }
   }
 });
 
@@ -326,13 +251,9 @@ async function checkBirthdays() {
           const isBirthday = parseInt(dd) === d && parseInt(mm) === m;
 
           if (isBirthday) {
-            if (!member.roles.cache.has(role.id)) {
-              await member.roles.add(role);
-            }
+            await member.roles.add(role);
           } else {
-            if (member.roles.cache.has(role.id)) {
-              await member.roles.remove(role);
-            }
+            await member.roles.remove(role).catch(() => {});
           }
 
         });
