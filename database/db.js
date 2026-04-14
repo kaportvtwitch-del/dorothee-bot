@@ -84,6 +84,7 @@ function upsertUser(userId, guildId, newData) {
       guild_id: guildId,
       birthday: null,
       is_vip: 0
+      show_age: 1
     };
 
     data.users.push(user);
