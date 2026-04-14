@@ -18,7 +18,7 @@ const {
 
 const sqlite3 = require("sqlite3").verbose();
 
-// ===================== CLIENT =====================
+// ================= CLIENT =================
 
 const client = new Client({
   intents: [
@@ -29,7 +29,7 @@ const client = new Client({
   ]
 });
 
-// ===================== DB =====================
+// ================= DB =================
 
 const db = new sqlite3.Database("/tmp/anniv.db");
 
@@ -62,17 +62,17 @@ db.serialize(() => {
   )`);
 });
 
-// ===================== COMMANDS =====================
+// ================= COMMANDS =================
 
 const commands = [
-  new SlashCommandBuilder().setName("db_menu").setDescription("🎛️ Menu anniversaire"),
-  new SlashCommandBuilder().setName("db_inscription").setDescription("⭐ Panel VIP"),
+  new SlashCommandBuilder().setName("db_menu").setDescription("🎛️ Menu"),
+  new SlashCommandBuilder().setName("db_inscription").setDescription("⭐ VIP panel"),
   new SlashCommandBuilder().setName("db_list").setDescription("📅 Liste semaine")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// ===================== READY =====================
+// ================= READY =================
 
 client.once("ready", async () => {
 
@@ -86,19 +86,17 @@ client.once("ready", async () => {
   setInterval(checkBirthdays, 60000);
 });
 
-// ===================== MAP INLINE INPUT =====================
+// ================= INLINE SYSTEM =================
 
 const waiting = new Map();
 
-// ===================== UTILS =====================
+// ================= UTILS =================
 
 function isThisWeek(dateStr) {
   const [d, m] = dateStr.split("/").map(Number);
 
   const now = new Date();
-  const year = now.getFullYear();
-
-  const date = new Date(year, m - 1, d);
+  const date = new Date(now.getFullYear(), m - 1, d);
 
   const start = new Date(now);
   start.setDate(now.getDate() - now.getDay());
@@ -109,7 +107,7 @@ function isThisWeek(dateStr) {
   return date >= start && date <= end;
 }
 
-// ===================== INTERACTIONS =====================
+// ================= INTERACTIONS =================
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
@@ -118,14 +116,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
 
-    // ===================== /db_menu =====================
+    // ================= MENU =================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_menu") {
 
       const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
       const embed = new EmbedBuilder()
-        .setTitle("🎂 ANNIVERSAIRES PANEL")
-        .setDescription("Gestion complète du bot")
+        .setTitle("🎂 ANNIVERSAIRES SYSTEM")
         .setColor(0x8e44ad);
 
       const row = new ActionRowBuilder().addComponents(
@@ -145,34 +142,35 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
-    // ===================== /db_inscription =====================
+    // ================= VIP PANEL =================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_inscription") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
-      const cfg = await new Promise(res =>
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (e, r) => res(r))
-      );
+      db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, cfg) => {
 
-      const embed = new EmbedBuilder()
-        .setTitle("⭐ VIP INSCRIPTION")
-        .setDescription(cfg?.vip_message || "Clique pour devenir VIP")
-        .setColor(0xffcc00);
+        const embed = new EmbedBuilder()
+          .setTitle("⭐ VIP")
+          .setDescription(cfg?.vip_message || "Clique pour devenir VIP")
+          .setColor(0xffcc00);
 
-      const btn = new ButtonBuilder()
-        .setCustomId("vip_join")
-        .setLabel(cfg?.vip_button || "⭐ VIP")
-        .setStyle(ButtonStyle.Success);
+        const btn = new ButtonBuilder()
+          .setCustomId("vip_join")
+          .setLabel(cfg?.vip_button || "⭐ VIP")
+          .setStyle(ButtonStyle.Success);
 
-      return interaction.channel.send({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(btn)]
+        interaction.channel.send({
+          embeds: [embed],
+          components: [new ActionRowBuilder().addComponents(btn)]
+        });
+
+        interaction.reply({ content: "✅ VIP envoyé", ephemeral: true });
       });
     }
 
-    // ===================== /db_list =====================
+    // ================= LISTE =================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_list") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -183,62 +181,52 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const week = rows.filter(r => isThisWeek(r.date));
 
-        const vip = [];
-        const novip = [];
+        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err2, cfg) => {
 
-        let done = 0;
+          const vip = [];
+          const novip = [];
 
-        week.forEach(r => {
+          let done = 0;
 
-          db.get("SELECT * FROM vip WHERE guild=? AND user=?", [guildId, r.user], (e, v) => {
+          if (!week.length) {
+            return interaction.reply("📭 Aucun anniversaire cette semaine");
+          }
 
-            if (v) vip.push(r);
-            else novip.push(r);
+          week.forEach(r => {
 
-            done++;
+            db.get("SELECT * FROM vip WHERE guild=? AND user=?", [guildId, r.user], (e, v) => {
 
-            if (done === week.length) {
+              if (v) vip.push(r);
+              else novip.push(r);
 
-              db.get("SELECT * FROM settings WHERE guild=?", [guildId], (e, cfg) => {
+              done++;
+
+              if (done === week.length) {
 
                 const text =
-`📅 **${cfg?.list_title || "LISTE SEMAINE"}**
+`🎂 **${cfg?.list_title || "LISTE SEMAINE"}**
 
 ⭐ **${cfg?.vip_title || "VIP"}**
-${vip.map(v => `• <@${v.user}> (${v.date})`).join("\n") || "Aucun"}
+${vip.length ? vip.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n") : "Aucun"}
 
 👤 **${cfg?.novip_title || "NON VIP"}**
-${novip.map(n => `• <@${n.user}> (${n.date})`).join("\n") || "Aucun"}
+${novip.length ? novip.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n") : "Aucun"}
 
 ---
 
-${cfg?.list_footer || "🎂 Bot anniversaires"}`;
+${cfg?.list_footer || "🎉 Anniversaires"}`;
 
                 interaction.reply({ content: text });
-              });
-            }
+              }
+            });
           });
         });
-
-        if (!week.length) {
-          interaction.reply("📭 Aucun anniversaire cette semaine");
-        }
       });
     }
 
-    // ===================== BUTTONS =====================
+    // ================= BUTTONS =================
     if (interaction.isButton()) {
 
-      // 🎂 date
-      if (interaction.customId === "my_date") {
-
-        return interaction.reply({
-          content: "✍️ Écris ta date ici (JJ/MM)",
-          ephemeral: true
-        });
-      }
-
-      // ⭐ VIP JOIN
       if (interaction.customId === "vip_join") {
 
         db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
@@ -246,28 +234,21 @@ ${cfg?.list_footer || "🎂 Bot anniversaires"}`;
         return interaction.reply({ content: "⭐ VIP ajouté", ephemeral: true });
       }
 
-      // ⚙️ ADMIN PANEL
       if (interaction.customId === "admin_panel") {
-
-        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-          return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
-        }
 
         const menu = new StringSelectMenuBuilder()
           .setCustomId("admin_menu")
-          .setPlaceholder("⚙️ Gestion complète")
+          .setPlaceholder("⚙️ Gestion")
           .addOptions(
-            { label: "🎭 Rôle jour J (@role)", value: "role" },
+            { label: "🎭 Rôle (@role)", value: "role" },
             { label: "📢 Salon (#salon)", value: "channel" },
-            { label: "📝 Message anniversaire", value: "message" },
-
+            { label: "📝 Message", value: "message" },
             { label: "🏷️ Titre liste", value: "list_title" },
-            { label: "⭐ Titre VIP", value: "vip_title" },
-            { label: "👤 Titre non VIP", value: "novip_title" },
+            { label: "⭐ VIP titre", value: "vip_title" },
+            { label: "👤 Non VIP titre", value: "novip_title" },
             { label: "📄 Footer", value: "footer" },
-
-            { label: "⭐ Message VIP", value: "vip_message" },
-            { label: "🔘 Bouton VIP", value: "vip_button" }
+            { label: "⭐ VIP message", value: "vip_message" },
+            { label: "🔘 VIP bouton", value: "vip_button" }
           );
 
         return interaction.reply({
@@ -277,94 +258,29 @@ ${cfg?.list_footer || "🎂 Bot anniversaires"}`;
       }
     }
 
-    // ===================== SELECT MENU =====================
+    // ================= MENU =================
     if (interaction.isStringSelectMenu()) {
 
       if (interaction.customId !== "admin_menu") return;
 
       const value = interaction.values[0];
 
-      const ask = (key, callback) => {
+      const ask = (field) => {
 
-        interaction.reply({
-          content: "✍️ Envoie la valeur dans le chat",
-          ephemeral: true
-        });
+        interaction.reply({ content: "✍️ Envoie dans le chat", ephemeral: true });
 
-        waiting.set(interaction.user.id, { key, guildId, callback });
+        waiting.set(interaction.user.id, { field, guildId });
       };
 
-      // ROLE
-      if (value === "role") {
-
-        ask("role", (msg) => {
-
-          const role = msg.mentions.roles.first();
-          if (!role) return msg.reply("❌ Mentionne un rôle");
-
-          db.run(`INSERT INTO settings (guild, role)
-          VALUES (?, ?)
-          ON CONFLICT(guild) DO UPDATE SET role=?`,
-            [guildId, role.id, role.id]
-          );
-
-          msg.reply("🎭 Rôle enregistré");
-        });
-      }
-
-      // CHANNEL
-      if (value === "channel") {
-
-        ask("channel", (msg) => {
-
-          const ch = msg.mentions.channels.first();
-          if (!ch) return msg.reply("❌ Mentionne un salon");
-
-          db.run(`INSERT INTO settings (guild, anniv_channel)
-          VALUES (?, ?)
-          ON CONFLICT(guild) DO UPDATE SET anniv_channel=?`,
-            [guildId, ch.id, ch.id]
-          );
-
-          msg.reply("📢 Salon enregistré");
-        });
-      }
-
-      // MESSAGE
-      if (value === "message") {
-
-        ask("message", (msg) => {
-
-          db.run(`INSERT INTO settings (guild, anniv_message)
-          VALUES (?, ?)
-          ON CONFLICT(guild) DO UPDATE SET anniv_message=?`,
-            [guildId, msg.content, msg.content]
-          );
-
-          msg.reply("📝 Message enregistré");
-        });
-      }
-
-      // TITRES + FOOTER
-      const simpleSave = (field) => {
-        ask(field, (msg) => {
-
-          db.run(`INSERT INTO settings (guild, ${field})
-          VALUES (?, ?)
-          ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
-            [guildId, msg.content, msg.content]
-          );
-
-          msg.reply("✅ Sauvegardé");
-        });
-      };
-
-      if (value === "list_title") simpleSave("list_title");
-      if (value === "vip_title") simpleSave("vip_title");
-      if (value === "novip_title") simpleSave("novip_title");
-      if (value === "footer") simpleSave("list_footer");
-      if (value === "vip_message") simpleSave("vip_message");
-      if (value === "vip_button") simpleSave("vip_button");
+      if (value === "role") ask("role");
+      if (value === "channel") ask("anniv_channel");
+      if (value === "message") ask("anniv_message");
+      if (value === "list_title") ask("list_title");
+      if (value === "vip_title") ask("vip_title");
+      if (value === "novip_title") ask("novip_title");
+      if (value === "footer") ask("list_footer");
+      if (value === "vip_message") ask("vip_message");
+      if (value === "vip_button") ask("vip_button");
     }
 
   } catch (err) {
@@ -372,7 +288,7 @@ ${cfg?.list_footer || "🎂 Bot anniversaires"}`;
   }
 });
 
-// ===================== MESSAGE LISTENER INLINE =====================
+// ================= MESSAGE INPUT =================
 
 client.on("messageCreate", (msg) => {
 
@@ -381,14 +297,20 @@ client.on("messageCreate", (msg) => {
   const wait = waiting.get(msg.author.id);
   if (!wait) return;
 
-  if (msg.guild.id !== wait.guildId) return;
-
   waiting.delete(msg.author.id);
 
-  wait.callback(msg);
+  const val = msg.content;
+
+  db.run(`INSERT INTO settings (guild, ${wait.field})
+    VALUES (?, ?)
+    ON CONFLICT(guild) DO UPDATE SET ${wait.field}=?`,
+    [wait.guildId, val, val]
+  );
+
+  msg.reply("✅ Sauvegardé");
 });
 
-// ===================== AUTO ANNIVERSAIRE =====================
+// ================= AUTO ANNIV =================
 
 async function checkBirthdays() {
 
@@ -410,21 +332,18 @@ async function checkBirthdays() {
 
       db.get("SELECT role FROM settings WHERE guild=?", [r.guild], async (e, cfg) => {
 
-        if (dd === d && mm === m && cfg?.role) {
+        const role = cfg?.role ? guild.roles.cache.get(cfg.role) : null;
 
-          const role = guild.roles.cache.get(cfg.role);
-          if (role) await member.roles.add(role).catch(() => {});
-
-        } else if (cfg?.role) {
-
-          const role = guild.roles.cache.get(cfg.role);
-          if (role) await member.roles.remove(role).catch(() => {});
+        if (dd === d && mm === m && role) {
+          await member.roles.add(role).catch(() => {});
+        } else if (role) {
+          await member.roles.remove(role).catch(() => {});
         }
       });
     }
   });
 }
 
-// ===================== LOGIN =====================
+// ================= LOGIN =================
 
 client.login(process.env.DISCORD_TOKEN);
