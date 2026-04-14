@@ -26,9 +26,8 @@ try {
 
     const cmd = require(`./commands/${file}`);
 
-    // sécurité anti crash
     if (!cmd.data || !cmd.data.name) {
-      console.log(`⚠️ Commande ignorée (mal formée): ${file}`);
+      console.log(`⚠️ Commande ignorée: ${file}`);
       continue;
     }
 
@@ -47,7 +46,6 @@ try {
 client.once('ready', () => {
   console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
 
-  // Lancement système anniversaire
   try {
     const { startBirthdayJob } = require('./services/birthdayService');
     startBirthdayJob(client);
@@ -65,27 +63,25 @@ client.on('interactionCreate', async (interaction) => {
 
     if (!interaction.guild) return;
 
-    // init config serveur
     db.initGuild(interaction.guild.id);
 
-    /* ================= SLASH COMMANDS ================= */
+    /* ===== SLASH COMMAND ===== */
 
     if (interaction.isChatInputCommand()) {
 
       const cmd = client.commands.get(interaction.commandName);
 
       if (!cmd) {
-        console.log(`❌ Commande non trouvée: ${interaction.commandName}`);
         return interaction.reply({
           content: "❌ Commande introuvable",
-          ephemeral: true
+          flags: 64
         });
       }
 
       return await cmd.execute(interaction);
     }
 
-    /* ================= BUTTONS ================= */
+    /* ===== BUTTON ===== */
 
     if (interaction.isButton()) {
 
@@ -96,12 +92,14 @@ client.on('interactionCreate', async (interaction) => {
   } catch (err) {
     console.error("💥 INTERACTION ERROR:", err);
 
-    if (interaction.replied || interaction.deferred) return;
-
-    return interaction.reply({
-      content: "❌ Une erreur est survenue.",
-      ephemeral: true
-    }).catch(() => {});
+    try {
+      if (!interaction.replied && !interaction.deferred) {
+        await interaction.reply({
+          content: "❌ Une erreur est survenue.",
+          flags: 64
+        });
+      }
+    } catch {}
   }
 });
 
