@@ -1,35 +1,25 @@
-const db = require('../database/db');
+const db = require("../database/db");
 
 module.exports = {
-  data: { name: "db_liste" },
+  data: {
+    name: "db_liste"
+  },
 
   async execute(interaction) {
+    const data = db.initGuild(interaction.guildId);
 
-    const guildId = interaction.guild.id;
+    const users = data.users;
 
-    const config = db.getConfig(guildId);
-    const users = db.getUsers(guildId);
+    let list = "🎂 ANNIVERSAIRES :\n\n";
 
-    const vip = users.filter(u => u.is_vip === 1);
-    const nonVip = users.filter(u => u.is_vip === 0);
+    for (const userId in users) {
+      const u = users[userId];
+      list += `- <@${userId}> (${u.date})\n`;
+    }
 
-    let msg = `💜 **${config.gen_title}**\n\n`;
-
-    msg += `⭐ **${config.gen_vip_title}**\n`;
-    msg += vip.length
-      ? vip.map(u => `<@${u.user_id}>`).join('\n')
-      : "Aucun VIP";
-
-    msg += `\n\n────────────\n\n`;
-
-    msg += `👤 **${config.gen_nonvip_title}**\n`;
-    msg += nonVip.length
-      ? nonVip.map(u => `<@${u.user_id}>`).join('\n')
-      : "Aucun membre";
-
-    msg += `\n\n────────────\n\n`;
-    msg += config.gen_footer;
-
-    await interaction.reply({ content: msg });
+    return interaction.reply({
+      content: list,
+      ephemeral: false
+    });
   }
 };
