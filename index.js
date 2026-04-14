@@ -87,10 +87,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       if (interaction.commandName === "db_menu") {
 
-        await interaction.deferReply({ ephemeral: true });
-
-        return interaction.editReply({
+        return interaction.reply({
           content: "🎂 Menu Anniversaire",
+          ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
               new ButtonBuilder().setCustomId("date").setLabel("🎂 Ma date").setStyle(ButtonStyle.Success),
@@ -107,7 +106,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
         }
 
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], async (err, config) => {
+        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
 
           const bouton = config?.bouton || "🎂 Je participe";
           const panel = config?.panel || "🎉 Clique pour t'inscrire !";
@@ -116,7 +115,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             new ButtonBuilder().setCustomId("vip_date").setLabel(bouton).setStyle(ButtonStyle.Success)
           );
 
-          await interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
+          interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
 
           interaction.channel.send({
             content: panel,
@@ -136,8 +135,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.update({ content: "❌ Fermé", components: [] });
       }
 
-      // DATE NORMAL
-      if (interaction.customId === "date") {
+      if (interaction.customId === "date" || interaction.customId === "vip_date") {
+
+        if (interaction.customId === "vip_date") {
+          db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
+        }
 
         const modal = new ModalBuilder()
           .setCustomId("date_modal")
@@ -153,26 +155,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.showModal(modal);
       }
 
-      // VIP (via panel)
-      if (interaction.customId === "vip_date") {
-
-        db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
-
-        const modal = new ModalBuilder()
-          .setCustomId("date_modal")
-          .setTitle("🎂 Date JJ/MM/AAAA");
-
-        const input = new TextInputBuilder()
-          .setCustomId("input")
-          .setLabel("Ex: 15/08/1998")
-          .setStyle(TextInputStyle.Short);
-
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-        return interaction.showModal(modal);
-      }
-
-      // ADMIN
       if (interaction.customId === "admin") {
 
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -197,45 +179,45 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      // LISTE
       if (interaction.customId === "list") {
 
-        await interaction.deferReply({ ephemeral: true });
+        return interaction.reply({ content: "⏳ Chargement...", ephemeral: true }).then(() => {
 
-        db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], async (err, rows) => {
+          db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
-          db.all("SELECT user FROM vip WHERE guild=?", [guildId], async (err, vips) => {
+            db.all("SELECT user FROM vip WHERE guild=?", [guildId], (err, vips) => {
 
-            const vipIds = vips.map(v => v.user);
+              const vipIds = vips.map(v => v.user);
 
-            let vipList = [];
-            let normalList = [];
+              let vipList = [];
+              let normalList = [];
 
-            for (const r of rows) {
-              const line = `<@${r.user}> → ${r.date}`;
+              rows.forEach(r => {
+                const line = `<@${r.user}> → ${r.date}`;
 
-              if (vipIds.includes(r.user)) {
-                vipList.push(`✨ ${line} ✨`);
-              } else {
-                normalList.push(line);
-              }
-            }
+                if (vipIds.includes(r.user)) {
+                  vipList.push(`✨ ${line} ✨`);
+                } else {
+                  normalList.push(line);
+                }
+              });
 
-            db.get("SELECT message_vip FROM settings WHERE guild=?", [guildId], (err, config) => {
+              db.get("SELECT message_vip FROM settings WHERE guild=?", [guildId], (err, config) => {
 
-              const vipMsg = config?.message_vip || "💎 VIP DU JOUR 💎";
+                const vipMsg = config?.message_vip || "💎 VIP DU JOUR 💎";
 
-              const final =
-                (vipList.length ? `${vipMsg}\n\n${vipList.join("\n")}\n\n` : "") +
-                (normalList.length ? normalList.join("\n") : "📭 Vide");
+                const final =
+                  (vipList.length ? `${vipMsg}\n\n${vipList.join("\n")}\n\n` : "") +
+                  (normalList.length ? normalList.join("\n") : "📭 Vide");
 
-              interaction.editReply(final);
+                interaction.editReply(final);
+              });
             });
           });
         });
       }
 
-      // MODALS TRIGGER
+      // MODALS
       const modalMap = {
         title: "Titre",
         msg: "Message",
@@ -268,18 +250,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isModalSubmit()) {
 
-      await interaction.deferReply({ ephemeral: true });
-
       const value = interaction.fields.getTextInputValue("input");
 
-      const map = {
-        title_modal: "titre",
-        msg_modal: "message",
-        vipmsg_modal: "message_vip",
-        panel_modal: "panel",
-        btn_modal: "bouton",
-        role_modal: "role"
-      };
+      await interaction.reply({
+        content: "⏳ Traitement...",
+        ephemeral: true
+      });
 
       if (interaction.customId === "date_modal") {
 
@@ -291,14 +267,21 @@ client.on(Events.InteractionCreate, async (interaction) => {
             interaction.editReply("🎉 Date enregistrée !");
           }
         );
-
         return;
       }
+
+      const map = {
+        title_modal: "titre",
+        msg_modal: "message",
+        vipmsg_modal: "message_vip",
+        panel_modal: "panel",
+        btn_modal: "bouton",
+        role_modal: "role"
+      };
 
       const field = map[interaction.customId];
 
       if (field) {
-
         db.run(
           `INSERT INTO settings (guild, ${field}) VALUES (?, ?) 
            ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
@@ -314,7 +297,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // =======================
-// ANNIV AUTO SAFE
+// ANNIV AUTO
 // =======================
 
 async function checkBirthdays() {
