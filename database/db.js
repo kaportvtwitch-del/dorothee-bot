@@ -1,8 +1,10 @@
 const fs = require('fs');
+const path = require('path');
 
-const DB_FILE = './database.json';
+const DB_FILE = path.join(__dirname, 'database.json');
 
-// INIT FILE
+/* ================= INIT ================= */
+
 function init() {
   if (!fs.existsSync(DB_FILE)) {
     fs.writeFileSync(DB_FILE, JSON.stringify({
@@ -12,26 +14,67 @@ function init() {
   }
 }
 
+/* ================= LOAD SAFE ================= */
+
 function load() {
   init();
-  return JSON.parse(fs.readFileSync(DB_FILE));
+
+  try {
+    const raw = fs.readFileSync(DB_FILE, 'utf-8');
+
+    if (!raw || raw.trim() === "") {
+      throw new Error("EMPTY JSON");
+    }
+
+    return JSON.parse(raw);
+
+  } catch (err) {
+    console.error("⚠️ JSON CORRUPTED → RESET");
+
+    const clean = {
+      users: [],
+      guild_config: []
+    };
+
+    fs.writeFileSync(DB_FILE, JSON.stringify(clean, null, 2));
+    return clean;
+  }
 }
+
+/* ================= SAVE ================= */
 
 function save(data) {
   fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
 }
 
-/* ===================== USERS ===================== */
+/* ================= GUILD INIT ================= */
 
-function getUsers(guildId) {
-  const db = load();
-  return db.users.filter(u => u.guild_id === guildId);
+function initGuild(guildId) {
+  const data = load();
+
+  let guild = data.guild_config.find(g => g.guild_id === guildId);
+
+  if (!guild) {
+    data.guild_config.push({
+      guild_id: guildId,
+      title: "🎉 Anniversaires de la semaine",
+      vip_title: "⭐ VIP",
+      nonvip_title: "🎈 Membres",
+      footer: "Bon anniversaire !",
+      role_id: null,
+      channel_id: null
+    });
+
+    save(data);
+  }
 }
 
-function upsertUser(userId, guildId, data = {}) {
-  const db = load();
+/* ================= USER UPSERT ================= */
 
-  let user = db.users.find(
+function upsertUser(userId, guildId, newData) {
+  const data = load();
+
+  let user = data.users.find(
     u => u.user_id === userId && u.guild_id === guildId
   );
 
@@ -40,49 +83,21 @@ function upsertUser(userId, guildId, data = {}) {
       user_id: userId,
       guild_id: guildId,
       birthday: null,
-      show_age: 0,
-      is_vip: 0,
-      ...data
+      is_vip: 0
     };
-    db.users.push(user);
-  } else {
-    Object.assign(user, data);
+
+    data.users.push(user);
   }
 
-  save(db);
+  Object.assign(user, newData);
+
+  save(data);
 }
 
-/* ===================== CONFIG ===================== */
-
-function initGuild(guildId) {
-  const db = load();
-
-  const exists = db.guild_config.find(g => g.guild_id === guildId);
-  if (exists) return;
-
-  db.guild_config.push({
-    guild_id: guildId,
-
-    gen_title: "GÉNÉRIQUE ANNIVERSAIRES",
-    gen_vip_title: "VIP",
-    gen_nonvip_title: "NON VIP",
-    gen_footer: "🎉 Bon anniversaire !",
-
-    vip_message: "⭐ Clique pour devenir VIP",
-    vip_button_label: "Devenir VIP"
-  });
-
-  save(db);
-}
-
-function getConfig(guildId) {
-  const db = load();
-  return db.guild_config.find(g => g.guild_id === guildId);
-}
+/* ================= EXPORT ================= */
 
 module.exports = {
-  getUsers,
-  upsertUser,
   initGuild,
-  getConfig
+  upsertUser,
+  load
 };
