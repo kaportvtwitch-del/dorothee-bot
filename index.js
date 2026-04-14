@@ -1,4 +1,5 @@
 console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
+console.log("🧠 PROCESS ID:", process.pid);
 
 const fs = require('fs');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
