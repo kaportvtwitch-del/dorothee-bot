@@ -1,10 +1,63 @@
 const db = require('../database/db');
 
+/* ================= DATE PARSE ================= */
+
+function parseDate(input) {
+  // attendu : dd/mm/yyyy
+  const parts = input.split('/');
+
+  if (parts.length !== 3) return null;
+
+  const [day, month, year] = parts;
+
+  if (!day || !month || !year) return null;
+
+  // format DB → yyyy-mm-dd
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+/* ================= HANDLER ================= */
+
 async function handleButtons(interaction) {
 
   const id = interaction.customId;
   const guildId = interaction.guild.id;
   const userId = interaction.user.id;
+
+  /* ================= ADD BIRTHDAY ================= */
+
+  if (id === 'add_birthday') {
+
+    await interaction.reply({
+      content: "📅 Envoie ta date au format **jj/mm/aaaa**",
+      ephemeral: true
+    });
+
+    const filter = m => m.author.id === userId;
+
+    const collector = interaction.channel.createMessageCollector({
+      filter,
+      time: 30000,
+      max: 1
+    });
+
+    collector.on('collect', (msg) => {
+
+      const parsed = parseDate(msg.content);
+
+      if (!parsed) {
+        return msg.reply("❌ Format invalide. Utilise **jj/mm/aaaa**");
+      }
+
+      db.upsertUser(userId, guildId, {
+        birthday: parsed
+      });
+
+      msg.reply("✅ Date enregistrée !");
+    });
+
+    return;
+  }
 
   /* ================= VIP ================= */
 
@@ -15,17 +68,18 @@ async function handleButtons(interaction) {
     });
 
     return interaction.reply({
-      content: "⭐ Tu es maintenant VIP dans le générique !",
+      content: "⭐ Tu es maintenant VIP !",
       ephemeral: true
     });
   }
 
-  /* ================= ADD BIRTHDAY ================= */
+  /* ================= GESTION ================= */
 
-  if (id === 'add_birthday') {
+  if (id === 'gestion') {
 
+    // ⚠️ IMPORTANT : répondre sinon "échec interaction"
     return interaction.reply({
-      content: "📅 Envoie ta date d'anniversaire (format: YYYY-MM-DD)",
+      content: "⚙️ Menu admin en cours de création...",
       ephemeral: true
     });
   }
@@ -33,7 +87,7 @@ async function handleButtons(interaction) {
   /* ================= CLOSE ================= */
 
   if (id === 'close_menu') {
-    return interaction.message.delete();
+    return interaction.message.delete().catch(() => {});
   }
 }
 
