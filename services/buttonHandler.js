@@ -7,9 +7,9 @@ const {
 
 const db = require('../database/db');
 
-/* ================= TEMP MEMORY ================= */
+/* ================= TEMP STORAGE ================= */
 
-const temp = {}; // stockage temporaire utilisateur
+const temp = {};
 
 /* ================= CREATE SELECT ================= */
 
@@ -91,18 +91,18 @@ async function handleButtons(interaction) {
 
     return interaction.update({
       content: "🎂 **Choisis ta date**",
-      components: interaction.message.components.map(row => {
-        return new ActionRowBuilder().addComponents(
+      components: interaction.message.components.map(row =>
+        new ActionRowBuilder().addComponents(
           row.components.map(comp => {
-            if (comp.customId === 'toggle_age') {
+            if (comp.data.custom_id === 'toggle_age') {
               return ButtonBuilder.from(comp)
                 .setLabel(`👁️ Afficher mon âge : ${data.show_age ? 'OUI' : 'NON'}`)
                 .setStyle(data.show_age ? ButtonStyle.Success : ButtonStyle.Secondary);
             }
             return comp;
           })
-        );
-      })
+        )
+      )
     });
   }
 
@@ -147,6 +147,16 @@ async function handleButtons(interaction) {
       flags: 64
     });
   }
+
+  /* ================= GESTION ================= */
+
+  if (id === 'gestion') {
+    return interaction.reply({
+      content: "⚙️ Menu admin bientôt dispo",
+      flags: 64
+    });
+  }
 }
 
-module.exports = { handleButtons };
+/* ✅ EXPORT OBLIGATOIRE (FIX CRASH) */
+module.exports = { handleButtons, temp };
