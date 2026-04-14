@@ -4,24 +4,24 @@ const { REST, Routes, SlashCommandBuilder } = require("discord.js");
 const commands = [
   new SlashCommandBuilder()
     .setName("db_menu")
-    .setDescription("🎂 Ouvrir le menu Dorothée"),
+    .setDescription("🎂 Ouvrir le menu"),
 
   new SlashCommandBuilder()
     .setName("db_list")
-    .setDescription("📺 Voir les anniversaires de la semaine"),
+    .setDescription("📺 Voir la liste"),
 
   new SlashCommandBuilder()
     .setName("db_setdate")
-    .setDescription("🎂 Définir ta date d'anniversaire")
+    .setDescription("🎂 Définir ta date")
     .addStringOption(option =>
       option.setName("date")
-        .setDescription("Format: JJ/MM")
+        .setDescription("JJ/MM")
         .setRequired(true)
     ),
 
   new SlashCommandBuilder()
     .setName("db_reset")
-    .setDescription("🧹 Reset la semaine (admin)")
+    .setDescription("🧹 Reset (admin)")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
@@ -31,5 +31,5 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
     Routes.applicationCommands(process.env.CLIENT_ID),
     { body: commands }
   );
-  console.log("✅ Commandes déployées !");
+  console.log("✅ Commandes déployées");
 })();
