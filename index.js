@@ -86,11 +86,11 @@ client.once("ready", async () => {
   setInterval(checkBirthdays, 60000);
 });
 
-// ================= INLINE SYSTEM =================
+// ================= INLINE =================
 
 const waiting = new Map();
 
-// ================= SAFE SAVE (IMPORTANT FIX) =================
+// ================= 🔥 FIX DB SAVE ULTRA STABLE =================
 
 function saveSetting(guildId, field, value) {
 
@@ -108,11 +108,22 @@ function saveSetting(guildId, field, value) {
 
   if (!allowed.includes(field)) return;
 
+  // 1️⃣ assure ligne existante
   db.run(
-    `INSERT INTO settings (guild, ${field})
-     VALUES (?, ?)
-     ON CONFLICT(guild) DO UPDATE SET ${field}=excluded.${field}`,
-    [guildId, value]
+    `INSERT INTO settings (guild) VALUES (?)
+     ON CONFLICT(guild) DO NOTHING`,
+    [guildId],
+    () => {
+
+      // 2️⃣ update fiable
+      db.run(
+        `UPDATE settings SET ${field} = ? WHERE guild = ?`,
+        [value, guildId],
+        (err) => {
+          if (err) console.error("DB ERROR:", err);
+        }
+      );
+    }
   );
 }
 
@@ -207,16 +218,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const week = rows.filter(r => isThisWeek(r.date));
 
-        const vip = [];
-        const novip = [];
-
-        let done = 0;
-
         if (!week.length) {
           return interaction.reply("📭 Aucun anniversaire cette semaine");
         }
 
         db.get("SELECT * FROM settings WHERE guild=?", [guildId], (e, cfg) => {
+
+          const vip = [];
+          const novip = [];
+
+          let done = 0;
 
           week.forEach(r => {
 
@@ -266,8 +277,8 @@ ${cfg?.list_footer || "🎉 Anniversaires"}`;
           .setCustomId("admin_menu")
           .setPlaceholder("⚙️ Gestion")
           .addOptions(
-            { label: "🎭 Rôle (@role)", value: "role" },
-            { label: "📢 Salon (#salon)", value: "channel" },
+            { label: "🎭 Rôle", value: "role" },
+            { label: "📢 Salon", value: "channel" },
             { label: "📝 Message", value: "message" },
             { label: "🏷️ Titre liste", value: "list_title" },
             { label: "⭐ VIP titre", value: "vip_title" },
@@ -284,7 +295,7 @@ ${cfg?.list_footer || "🎉 Anniversaires"}`;
       }
     }
 
-    // ================= MENU INLINE =================
+    // ================= MENU =================
     if (interaction.isStringSelectMenu()) {
 
       if (interaction.customId !== "admin_menu") return;
@@ -344,7 +355,7 @@ client.on("messageCreate", (msg) => {
   msg.reply("✅ Sauvegardé !");
 });
 
-// ================= AUTO ANNIV =================
+// ================= AUTO ANNIVERSAIRES =================
 
 async function checkBirthdays() {
 
