@@ -2,10 +2,9 @@
   "name": "discord-birthday-bot",
   "version": "1.0.0",
   "main": "app.js",
-  "type": "commonjs",
   "scripts": {
     "start": "node app.js",
-    "deploy": "node commands/deploy-commands.js"
+    "deploy": "node deploy-commands.js"
   },
   "dependencies": {
     "discord.js": "^14.16.3",
