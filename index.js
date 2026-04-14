@@ -12,26 +12,24 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
   EmbedBuilder,
   StringSelectMenuBuilder
 } = require("discord.js");
 
 const sqlite3 = require("sqlite3").verbose();
 
-// =====================
-// CLIENT
-// =====================
+// ===================== CLIENT =====================
 
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-// =====================
-// DB
-// =====================
+// ===================== DB =====================
 
 const db = new sqlite3.Database("/tmp/anniv.db");
 
@@ -56,13 +54,15 @@ db.serialize(() => {
     anniv_channel TEXT,
     anniv_message TEXT,
     vip_message TEXT,
-    vip_button TEXT
+    vip_button TEXT,
+    list_title TEXT,
+    vip_title TEXT,
+    novip_title TEXT,
+    list_footer TEXT
   )`);
 });
 
-// =====================
-// COMMANDES
-// =====================
+// ===================== COMMANDS =====================
 
 const commands = [
   new SlashCommandBuilder().setName("db_menu").setDescription("🎛️ Menu anniversaire"),
@@ -72,9 +72,7 @@ const commands = [
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// =====================
-// READY
-// =====================
+// ===================== READY =====================
 
 client.once("ready", async () => {
 
@@ -88,9 +86,11 @@ client.once("ready", async () => {
   setInterval(checkBirthdays, 60000);
 });
 
-// =====================
-// UTILS
-// =====================
+// ===================== MAP INLINE INPUT =====================
+
+const waiting = new Map();
+
+// ===================== UTILS =====================
 
 function isThisWeek(dateStr) {
   const [d, m] = dateStr.split("/").map(Number);
@@ -109,9 +109,7 @@ function isThisWeek(dateStr) {
   return date >= start && date <= end;
 }
 
-// =====================
-// INTERACTIONS
-// =====================
+// ===================== INTERACTIONS =====================
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
@@ -120,16 +118,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
 
-    // =====================
-    // /db_menu
-    // =====================
+    // ===================== /db_menu =====================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_menu") {
 
       const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
 
       const embed = new EmbedBuilder()
-        .setTitle("🎂 ANNIVERSAIRES MENU")
-        .setDescription("Gestion du système")
+        .setTitle("🎂 ANNIVERSAIRES PANEL")
+        .setDescription("Gestion complète du bot")
         .setColor(0x8e44ad);
 
       const row = new ActionRowBuilder().addComponents(
@@ -141,21 +137,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
         ...(isAdmin ? [
           new ButtonBuilder()
             .setCustomId("admin_panel")
-            .setLabel("⚙️ Admin")
+            .setLabel("⚙️ Gestion")
             .setStyle(ButtonStyle.Primary)
         ] : [])
       );
 
-      return interaction.reply({
-        embeds: [embed],
-        components: [row],
-        ephemeral: true
-      });
+      return interaction.reply({ embeds: [embed], components: [row], ephemeral: true });
     }
 
-    // =====================
-    // /db_inscription
-    // =====================
+    // ===================== /db_inscription =====================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_inscription") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -167,8 +157,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
       );
 
       const embed = new EmbedBuilder()
-        .setTitle("⭐ VIP")
-        .setDescription(cfg?.vip_message || "Clique pour rejoindre VIP")
+        .setTitle("⭐ VIP INSCRIPTION")
+        .setDescription(cfg?.vip_message || "Clique pour devenir VIP")
         .setColor(0xffcc00);
 
       const btn = new ButtonBuilder()
@@ -182,9 +172,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
-    // =====================
-    // /db_list (SEMAINE)
-    // =====================
+    // ===================== /db_list =====================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_list") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -193,46 +181,64 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
-        if (!rows) return interaction.reply("📭 Vide");
-
         const week = rows.filter(r => isThisWeek(r.date));
 
+        const vip = [];
+        const novip = [];
+
+        let done = 0;
+
+        week.forEach(r => {
+
+          db.get("SELECT * FROM vip WHERE guild=? AND user=?", [guildId, r.user], (e, v) => {
+
+            if (v) vip.push(r);
+            else novip.push(r);
+
+            done++;
+
+            if (done === week.length) {
+
+              db.get("SELECT * FROM settings WHERE guild=?", [guildId], (e, cfg) => {
+
+                const text =
+`📅 **${cfg?.list_title || "LISTE SEMAINE"}**
+
+⭐ **${cfg?.vip_title || "VIP"}**
+${vip.map(v => `• <@${v.user}> (${v.date})`).join("\n") || "Aucun"}
+
+👤 **${cfg?.novip_title || "NON VIP"}**
+${novip.map(n => `• <@${n.user}> (${n.date})`).join("\n") || "Aucun"}
+
+---
+
+${cfg?.list_footer || "🎂 Bot anniversaires"}`;
+
+                interaction.reply({ content: text });
+              });
+            }
+          });
+        });
+
         if (!week.length) {
-          return interaction.reply("📭 Aucun anniversaire cette semaine");
+          interaction.reply("📭 Aucun anniversaire cette semaine");
         }
-
-        const text = week.map(r =>
-          `🎂 <@${r.user}> → **${r.date}**`
-        ).join("\n");
-
-        return interaction.reply({ content: text });
       });
     }
 
-    // =====================
-    // BUTTONS
-    // =====================
-
+    // ===================== BUTTONS =====================
     if (interaction.isButton()) {
 
       // 🎂 date
       if (interaction.customId === "my_date") {
 
-        const modal = new ModalBuilder()
-          .setCustomId("date_modal")
-          .setTitle("🎂 Date anniversaire");
-
-        const input = new TextInputBuilder()
-          .setCustomId("input")
-          .setLabel("JJ/MM")
-          .setStyle(TextInputStyle.Short);
-
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-        return interaction.showModal(modal);
+        return interaction.reply({
+          content: "✍️ Écris ta date ici (JJ/MM)",
+          ephemeral: true
+        });
       }
 
-      // ⭐ VIP
+      // ⭐ VIP JOIN
       if (interaction.customId === "vip_join") {
 
         db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
@@ -249,11 +255,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const menu = new StringSelectMenuBuilder()
           .setCustomId("admin_menu")
-          .setPlaceholder("⚙️ Configuration")
+          .setPlaceholder("⚙️ Gestion complète")
           .addOptions(
-            { label: "🎭 Rôle jour J", value: "role" },
-            { label: "📢 Salon anniversaire", value: "channel" },
-            { label: "📝 Message anniversaire", value: "message" }
+            { label: "🎭 Rôle jour J (@role)", value: "role" },
+            { label: "📢 Salon (#salon)", value: "channel" },
+            { label: "📝 Message anniversaire", value: "message" },
+
+            { label: "🏷️ Titre liste", value: "list_title" },
+            { label: "⭐ Titre VIP", value: "vip_title" },
+            { label: "👤 Titre non VIP", value: "novip_title" },
+            { label: "📄 Footer", value: "footer" },
+
+            { label: "⭐ Message VIP", value: "vip_message" },
+            { label: "🔘 Bouton VIP", value: "vip_button" }
           );
 
         return interaction.reply({
@@ -263,117 +277,94 @@ client.on(Events.InteractionCreate, async (interaction) => {
       }
     }
 
-    // =====================
-    // SELECT MENU
-    // =====================
-
+    // ===================== SELECT MENU =====================
     if (interaction.isStringSelectMenu()) {
 
-      if (interaction.customId === "admin_menu") {
+      if (interaction.customId !== "admin_menu") return;
 
-        const value = interaction.values[0];
+      const value = interaction.values[0];
 
-        if (value === "role") {
+      const ask = (key, callback) => {
 
-          const modal = new ModalBuilder()
-            .setCustomId("role_modal")
-            .setTitle("🎭 Rôle jour J");
+        interaction.reply({
+          content: "✍️ Envoie la valeur dans le chat",
+          ephemeral: true
+        });
 
-          const input = new TextInputBuilder()
-            .setCustomId("input")
-            .setLabel("ID rôle")
-            .setStyle(TextInputStyle.Short);
+        waiting.set(interaction.user.id, { key, guildId, callback });
+      };
 
-          modal.addComponents(new ActionRowBuilder().addComponents(input));
+      // ROLE
+      if (value === "role") {
 
-          return interaction.showModal(modal);
-        }
+        ask("role", (msg) => {
 
-        if (value === "channel") {
+          const role = msg.mentions.roles.first();
+          if (!role) return msg.reply("❌ Mentionne un rôle");
 
-          const modal = new ModalBuilder()
-            .setCustomId("channel_modal")
-            .setTitle("📢 Salon anniversaire");
-
-          const input = new TextInputBuilder()
-            .setCustomId("input")
-            .setLabel("ID salon")
-            .setStyle(TextInputStyle.Short);
-
-          modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-          return interaction.showModal(modal);
-        }
-
-        if (value === "message") {
-
-          const modal = new ModalBuilder()
-            .setCustomId("message_modal")
-            .setTitle("📝 Message anniversaire");
-
-          const input = new TextInputBuilder()
-            .setCustomId("input")
-            .setLabel("Message {user}")
-            .setStyle(TextInputStyle.Paragraph);
-
-          modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-          return interaction.showModal(modal);
-        }
-      }
-    }
-
-    // =====================
-    // MODALS
-    // =====================
-
-    if (interaction.isModalSubmit()) {
-
-      const value = interaction.fields.getTextInputValue("input");
-
-      if (interaction.customId === "date_modal") {
-
-        db.run("INSERT OR REPLACE INTO anniversaires VALUES (?, ?, ?)", [
-          guildId,
-          interaction.user.id,
-          value
-        ]);
-
-        return interaction.reply({ content: "🎉 Date enregistrée", ephemeral: true });
-      }
-
-      if (interaction.customId === "role_modal") {
-
-        db.run(`INSERT INTO settings (guild, role)
+          db.run(`INSERT INTO settings (guild, role)
           VALUES (?, ?)
           ON CONFLICT(guild) DO UPDATE SET role=?`,
-          [guildId, value, value]
-        );
+            [guildId, role.id, role.id]
+          );
 
-        return interaction.reply({ content: "🎭 Rôle enregistré", ephemeral: true });
+          msg.reply("🎭 Rôle enregistré");
+        });
       }
 
-      if (interaction.customId === "channel_modal") {
+      // CHANNEL
+      if (value === "channel") {
 
-        db.run(`INSERT INTO settings (guild, anniv_channel)
+        ask("channel", (msg) => {
+
+          const ch = msg.mentions.channels.first();
+          if (!ch) return msg.reply("❌ Mentionne un salon");
+
+          db.run(`INSERT INTO settings (guild, anniv_channel)
           VALUES (?, ?)
           ON CONFLICT(guild) DO UPDATE SET anniv_channel=?`,
-          [guildId, value, value]
-        );
+            [guildId, ch.id, ch.id]
+          );
 
-        return interaction.reply({ content: "📢 Salon enregistré", ephemeral: true });
+          msg.reply("📢 Salon enregistré");
+        });
       }
 
-      if (interaction.customId === "message_modal") {
+      // MESSAGE
+      if (value === "message") {
 
-        db.run(`INSERT INTO settings (guild, anniv_message)
+        ask("message", (msg) => {
+
+          db.run(`INSERT INTO settings (guild, anniv_message)
           VALUES (?, ?)
           ON CONFLICT(guild) DO UPDATE SET anniv_message=?`,
-          [guildId, value, value]
-        );
+            [guildId, msg.content, msg.content]
+          );
 
-        return interaction.reply({ content: "📝 Message enregistré", ephemeral: true });
+          msg.reply("📝 Message enregistré");
+        });
       }
+
+      // TITRES + FOOTER
+      const simpleSave = (field) => {
+        ask(field, (msg) => {
+
+          db.run(`INSERT INTO settings (guild, ${field})
+          VALUES (?, ?)
+          ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
+            [guildId, msg.content, msg.content]
+          );
+
+          msg.reply("✅ Sauvegardé");
+        });
+      };
+
+      if (value === "list_title") simpleSave("list_title");
+      if (value === "vip_title") simpleSave("vip_title");
+      if (value === "novip_title") simpleSave("novip_title");
+      if (value === "footer") simpleSave("list_footer");
+      if (value === "vip_message") simpleSave("vip_message");
+      if (value === "vip_button") simpleSave("vip_button");
     }
 
   } catch (err) {
@@ -381,9 +372,23 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// =====================
-// AUTO ANNIVERSAIRE
-// =====================
+// ===================== MESSAGE LISTENER INLINE =====================
+
+client.on("messageCreate", (msg) => {
+
+  if (msg.author.bot) return;
+
+  const wait = waiting.get(msg.author.id);
+  if (!wait) return;
+
+  if (msg.guild.id !== wait.guildId) return;
+
+  waiting.delete(msg.author.id);
+
+  wait.callback(msg);
+});
+
+// ===================== AUTO ANNIVERSAIRE =====================
 
 async function checkBirthdays() {
 
@@ -393,33 +398,33 @@ async function checkBirthdays() {
 
   db.all("SELECT * FROM anniversaires", async (err, rows) => {
 
-    for (const row of rows) {
+    for (const r of rows) {
 
-      const [dd, mm] = row.date.split("/").map(Number);
+      const [dd, mm] = r.date.split("/").map(Number);
 
-      if (dd !== d || mm !== m) continue;
-
-      const guild = await client.guilds.fetch(row.guild).catch(() => null);
+      const guild = await client.guilds.fetch(r.guild).catch(() => null);
       if (!guild) continue;
 
-      const member = await guild.members.fetch(row.user).catch(() => null);
+      const member = await guild.members.fetch(r.user).catch(() => null);
       if (!member) continue;
 
-      db.get("SELECT role FROM settings WHERE guild=?", [row.guild], async (err, cfg) => {
+      db.get("SELECT role FROM settings WHERE guild=?", [r.guild], async (e, cfg) => {
 
-        if (!cfg?.role) return;
+        if (dd === d && mm === m && cfg?.role) {
 
-        const role = guild.roles.cache.get(cfg.role);
-        if (!role) return;
+          const role = guild.roles.cache.get(cfg.role);
+          if (role) await member.roles.add(role).catch(() => {});
 
-        await member.roles.add(role).catch(() => {});
+        } else if (cfg?.role) {
+
+          const role = guild.roles.cache.get(cfg.role);
+          if (role) await member.roles.remove(role).catch(() => {});
+        }
       });
     }
   });
 }
 
-// =====================
-// LOGIN
-// =====================
+// ===================== LOGIN =====================
 
 client.login(process.env.DISCORD_TOKEN);
