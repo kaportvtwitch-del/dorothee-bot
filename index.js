@@ -2,18 +2,28 @@ console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
 
 const fs = require('fs');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const db = require('./database/db');
 
+/* ================= SAFE REQUIRE ================= */
+
+let db = null;
 let handleButtons = null;
 let temp = {};
+
+try {
+  db = require('./database/db');
+} catch (e) {
+  console.error("❌ DB ERROR:", e);
+}
 
 try {
   const handler = require('./services/buttonHandler');
   handleButtons = handler.handleButtons;
   temp = handler.temp || {};
-} catch (err) {
-  console.error("❌ buttonHandler error:", err);
+} catch (e) {
+  console.error("❌ BUTTON HANDLER ERROR:", e);
 }
+
+/* ================= TOKEN ================= */
 
 const TOKEN = process.env.TOKEN;
 
@@ -22,48 +32,74 @@ if (!TOKEN) {
   process.exit(1);
 }
 
+/* ================= CLIENT ================= */
+
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers
+  ]
 });
 
 client.commands = new Collection();
 
-/* LOAD COMMANDS */
-const commandFiles = fs.readdirSync('./commands');
+/* ================= SAFE LOAD COMMANDS ================= */
 
-for (const file of commandFiles) {
-  if (!file.endsWith('.js')) continue;
+try {
+  const commandFiles = fs.readdirSync('./commands');
 
-  const cmd = require(`./commands/${file}`);
+  for (const file of commandFiles) {
+    if (!file.endsWith('.js')) continue;
 
-  if (!cmd.data || !cmd.data.name) continue;
+    try {
+      const cmd = require(`./commands/${file}`);
 
-  client.commands.set(cmd.data.name, cmd);
-  console.log(`✅ Commande chargée: ${cmd.data.name}`);
+      if (!cmd.data || !cmd.data.name) {
+        console.warn(`⚠️ Commande ignorée: ${file}`);
+        continue;
+      }
+
+      client.commands.set(cmd.data.name, cmd);
+      console.log(`✅ Commande chargée: ${cmd.data.name}`);
+
+    } catch (err) {
+      console.error(`❌ ERREUR CMD ${file}:`, err);
+    }
+  }
+
+} catch (err) {
+  console.error("❌ COMMAND FOLDER ERROR:", err);
 }
+
+/* ================= READY ================= */
 
 client.once('ready', () => {
   console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
+  console.log("🎂 Birthday system ON");
 });
 
-/* INTERACTIONS */
+/* ================= INTERACTIONS ================= */
+
 client.on('interactionCreate', async (interaction) => {
   try {
 
     if (!interaction.guild) return;
 
-    db.initGuild(interaction.guild.id);
+    if (db?.initGuild) {
+      db.initGuild(interaction.guild.id);
+    }
 
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
-      if (cmd) return cmd.execute(interaction);
+      if (cmd) return await cmd.execute(interaction);
     }
 
     if (interaction.isButton()) {
-      if (handleButtons) return handleButtons(interaction);
+      if (handleButtons) return await handleButtons(interaction);
     }
 
     if (interaction.isStringSelectMenu()) {
+
       const data = temp[interaction.user.id];
       if (!data) return interaction.deferUpdate();
 
@@ -79,6 +115,8 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
+/* ================= LOGIN ================= */
+
 client.login(TOKEN)
   .then(() => console.log("🔐 Login Discord OK"))
-  .catch(console.error);
+  .catch(err => console.error("❌ LOGIN ERROR:", err));
