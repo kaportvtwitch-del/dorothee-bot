@@ -1,3 +1,4 @@
+console.log("🔥 INDEX LANCÉ");
 const fs = require('fs');
 const {
   Client,
