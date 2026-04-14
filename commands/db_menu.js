@@ -1,43 +1,40 @@
 const {
-  SlashCommandBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle
 } = require('discord.js');
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName('db_menu')
-    .setDescription('Menu anniversaires'),
+  data: {
+    name: "db_menu",
+    description: "Menu anniversaire"
+  },
 
   async execute(interaction) {
+
+    // 🔥 OBLIGATOIRE → évite timeout Discord
+    await interaction.deferReply({ ephemeral: true });
 
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('add_birthday')
-        .setLabel('Ajouter / modifier')
+        .setLabel('Ajouter / modifier ma date')
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
-        .setCustomId('delete_birthday')
-        .setLabel('Supprimer')
-        .setStyle(ButtonStyle.Danger),
-
-      new ButtonBuilder()
-        .setCustomId('admin_panel')
+        .setCustomId('gestion')
         .setLabel('Gestion')
         .setStyle(ButtonStyle.Secondary),
 
       new ButtonBuilder()
         .setCustomId('close_menu')
         .setLabel('Fermer')
-        .setStyle(ButtonStyle.Secondary)
+        .setStyle(ButtonStyle.Danger)
     );
 
-    await interaction.reply({
-      content: "🎂 Menu anniversaires",
-      components: [row],
-      ephemeral: true
+    await interaction.editReply({
+      content: "🎂 Menu anniversaire",
+      components: [row]
     });
   }
 };
