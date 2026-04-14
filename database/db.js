@@ -1,104 +1,55 @@
-const fs = require('fs');
-const path = require('path');
+const fs = require("fs");
+const path = require("path");
 
-const DB_FILE = path.join(__dirname, 'database.json');
-
-/* ================= INIT ================= */
-
-function init() {
-  if (!fs.existsSync(DB_FILE)) {
-    fs.writeFileSync(DB_FILE, JSON.stringify({
-      users: [],
-      guild_config: []
-    }, null, 2));
-  }
-}
-
-/* ================= LOAD SAFE ================= */
+const file = path.join(__dirname, "database.json");
 
 function load() {
-  init();
-
-  try {
-    const raw = fs.readFileSync(DB_FILE, 'utf-8');
-
-    if (!raw || raw.trim() === "") {
-      throw new Error("EMPTY JSON");
-    }
-
-    return JSON.parse(raw);
-
-  } catch (err) {
-    console.error("⚠️ JSON CORRUPTED → RESET");
-
-    const clean = {
-      users: [],
-      guild_config: []
-    };
-
-    fs.writeFileSync(DB_FILE, JSON.stringify(clean, null, 2));
-    return clean;
+  if (!fs.existsSync(file)) {
+    fs.writeFileSync(file, "{}");
   }
-}
 
-/* ================= SAVE ================= */
+  const data = fs.readFileSync(file, "utf8");
+
+  if (!data || data.trim() === "") {
+    return {};
+  }
+
+  return JSON.parse(data);
+}
 
 function save(data) {
-  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-/* ================= GUILD INIT ================= */
-
+/* INIT GUILD SAFE */
 function initGuild(guildId) {
-  const data = load();
+  const db = load();
 
-  let guild = data.guild_config.find(g => g.guild_id === guildId);
-
-  if (!guild) {
-    data.guild_config.push({
-      guild_id: guildId,
-      title: "🎉 Anniversaires de la semaine",
-      vip_title: "⭐ VIP",
-      nonvip_title: "🎈 Membres",
-      footer: "Bon anniversaire !",
-      role_id: null,
-      channel_id: null
-    });
-
-    save(data);
-  }
-}
-
-/* ================= USER UPSERT ================= */
-
-function upsertUser(userId, guildId, newData) {
-  const data = load();
-
-  let user = data.users.find(
-    u => u.user_id === userId && u.guild_id === guildId
-  );
-
-  if (!user) {
-    user = {
-      user_id: userId,
-      guild_id: guildId,
-      birthday: null,
-      is_vip: 0,
-      show_age: 1
+  if (!db[guildId]) {
+    db[guildId] = {
+      users: {},
+      config: {
+        title: "🎂 Anniversaires",
+        vipTitle: "👑 VIP",
+        normalTitle: "🎉 Membres",
+        footer: "Bon anniversaire !",
+        show_age_default: true,
+        vipRole: null,
+        channelId: null,
+        birthdayMessage: "Bon anniversaire {user} 🎉",
+        vipMessage: "Tu veux devenir VIP ?",
+        vipButton: "Devenir VIP"
+      }
     };
 
-    data.users.push(user);
+    save(db);
   }
 
-  Object.assign(user, newData);
-
-  save(data);
+  return db[guildId];
 }
 
-/* ================= EXPORT ================= */
-
 module.exports = {
-  initGuild,
-  upsertUser,
-  load
+  load,
+  save,
+  initGuild
 };
