@@ -26,12 +26,18 @@ const client = new Client({
 const db = new sqlite3.Database("./anniv.db");
 
 // =======================
-// DATABASE
+// DB
 // =======================
 
 db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
+db.run(`CREATE TABLE IF NOT EXISTS vip (guild TEXT, user TEXT)`);
 db.run(`CREATE TABLE IF NOT EXISTS settings (
   guild TEXT PRIMARY KEY,
+  titre TEXT,
+  message TEXT,
+  message_vip TEXT,
+  panel TEXT,
+  bouton TEXT,
   role TEXT
 )`);
 
@@ -41,23 +47,18 @@ db.run(`CREATE TABLE IF NOT EXISTS settings (
 
 const commands = [
   new SlashCommandBuilder().setName("db_menu").setDescription("🎂 Menu anniversaire"),
+  new SlashCommandBuilder().setName("db_panel").setDescription("📨 Envoyer panel")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 
-// =======================
-// READY
-// =======================
-
 client.once("ready", async () => {
-  console.log(`✅ Connecté : ${client.user.tag}`);
+  console.log(`✅ ${client.user.tag}`);
 
   await rest.put(
     Routes.applicationCommands(process.env.CLIENT_ID),
     { body: commands }
   );
-
-  console.log("✅ Commandes OK");
 
   setInterval(checkBirthdays, 60000);
 });
@@ -73,13 +74,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
 
     // =======================
-    // COMMANDE
+    // COMMANDES
     // =======================
 
     if (interaction.isChatInputCommand()) {
 
       if (interaction.commandName === "db_menu") {
-
         return interaction.reply({
           content: "🎂 Menu",
           ephemeral: true,
@@ -91,6 +91,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ]
         });
       }
+
+      if (interaction.commandName === "db_panel") {
+
+        if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
+          return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
+        }
+
+        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
+
+          const text = config?.panel || "🎉 Clique pour t'inscrire";
+          const btn = config?.bouton || "🎂 Participer";
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("vip").setLabel(btn).setStyle(ButtonStyle.Success)
+          );
+
+          interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
+
+          interaction.channel.send({
+            content: text,
+            components: [row]
+          });
+        });
+      }
     }
 
     // =======================
@@ -99,24 +123,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isButton()) {
 
-      // 🎂 DATE
-      if (interaction.customId === "date") {
+      // DATE
+      if (interaction.customId === "date" || interaction.customId === "vip") {
+
+        if (interaction.customId === "vip") {
+          db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
+        }
 
         const modal = new ModalBuilder()
           .setCustomId("date_modal")
-          .setTitle("🎂 Date anniversaire");
+          .setTitle("🎂 Date JJ/MM/AAAA");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel("Format JJ/MM/AAAA")
+          .setLabel("Ex: 15/08/1998")
           .setStyle(TextInputStyle.Short);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
 
-        return interaction.showModal(modal); // ✅ PAS DE REPLY ICI
+        return interaction.showModal(modal);
       }
 
-      // ⚙️ ADMIN
+      // ADMIN
       if (interaction.customId === "admin") {
 
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
@@ -128,42 +156,70 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId("list").setLabel("📺 Voir liste").setStyle(ButtonStyle.Primary),
-              new ButtonBuilder().setCustomId("role").setLabel("🎭 Définir rôle").setStyle(ButtonStyle.Secondary)
+              new ButtonBuilder().setCustomId("list").setLabel("📺 Liste").setStyle(ButtonStyle.Primary),
+              new ButtonBuilder().setCustomId("title").setLabel("✏️ Titre"),
+              new ButtonBuilder().setCustomId("msg").setLabel("📝 Message"),
+              new ButtonBuilder().setCustomId("vipmsg").setLabel("💎 VIP"),
+              new ButtonBuilder().setCustomId("panel").setLabel("🧾 Panel"),
+              new ButtonBuilder().setCustomId("btn").setLabel("🔘 Bouton"),
+              new ButtonBuilder().setCustomId("role").setLabel("🎭 Rôle")
             )
           ]
         });
       }
 
-      // 📺 LISTE
+      // LISTE
       if (interaction.customId === "list") {
 
         return interaction.reply({ content: "⏳ Chargement...", ephemeral: true }).then(() => {
 
           db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
-            if (!rows.length) {
-              return interaction.editReply("📭 Aucune donnée");
-            }
+            db.all("SELECT user FROM vip WHERE guild=?", [guildId], (err, vips) => {
 
-            const list = rows.map(r => `<@${r.user}> → ${r.date}`).join("\n");
+              const vipIds = vips.map(v => v.user);
 
-            interaction.editReply(list);
+              let vipList = [];
+              let normal = [];
+
+              rows.forEach(r => {
+                const line = `<@${r.user}> → ${r.date}`;
+
+                if (vipIds.includes(r.user)) {
+                  vipList.push(`✨ ${line} ✨`);
+                } else {
+                  normal.push(line);
+                }
+              });
+
+              db.get("SELECT message_vip FROM settings WHERE guild=?", [guildId], (err, config) => {
+
+                const vipMsg = config?.message_vip || "💎 VIP 💎";
+
+                const final =
+                  (vipList.length ? `${vipMsg}\n\n${vipList.join("\n")}\n\n` : "") +
+                  (normal.length ? normal.join("\n") : "📭 Vide");
+
+                interaction.editReply(final);
+              });
+            });
           });
         });
       }
 
-      // 🎭 ROLE
-      if (interaction.customId === "role") {
+      // MODALS ADMIN
+      const modals = ["title", "msg", "vipmsg", "panel", "btn", "role"];
+
+      if (modals.includes(interaction.customId)) {
 
         const modal = new ModalBuilder()
-          .setCustomId("role_modal")
-          .setTitle("ID du rôle");
+          .setCustomId(interaction.customId + "_modal")
+          .setTitle("Modifier");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel("Colle l'ID du rôle")
-          .setStyle(TextInputStyle.Short);
+          .setLabel("Valeur")
+          .setStyle(TextInputStyle.Paragraph);
 
         modal.addComponents(new ActionRowBuilder().addComponents(input));
 
@@ -179,45 +235,42 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
       const value = interaction.fields.getTextInputValue("input");
 
-      // ✅ OBLIGATOIRE pour éviter le bug
       await interaction.deferReply({ ephemeral: true });
 
-      // 🎂 DATE
       if (interaction.customId === "date_modal") {
 
         db.run(
           "INSERT OR REPLACE INTO anniversaires VALUES (?, ?, ?)",
           [guildId, interaction.user.id, value],
-          (err) => {
-            if (err) return interaction.editReply("❌ Erreur DB");
-
-            return interaction.editReply("🎉 Date enregistrée !");
-          }
+          () => interaction.editReply("🎉 Enregistré !")
         );
 
         return;
       }
 
-      // 🎭 ROLE
-      if (interaction.customId === "role_modal") {
+      const map = {
+        title_modal: "titre",
+        msg_modal: "message",
+        vipmsg_modal: "message_vip",
+        panel_modal: "panel",
+        btn_modal: "bouton",
+        role_modal: "role"
+      };
 
+      const field = map[interaction.customId];
+
+      if (field) {
         db.run(
-          `INSERT INTO settings (guild, role) VALUES (?, ?) 
-           ON CONFLICT(guild) DO UPDATE SET role=?`,
+          `INSERT INTO settings (guild, ${field}) VALUES (?, ?) 
+           ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
           [guildId, value, value],
-          () => interaction.editReply("✅ Rôle enregistré")
+          () => interaction.editReply("✅ Modifié")
         );
-
-        return;
       }
     }
 
   } catch (err) {
     console.error(err);
-
-    if (!interaction.replied) {
-      interaction.reply({ content: "❌ Erreur", ephemeral: true });
-    }
   }
 });
 
