@@ -1,33 +1,35 @@
-const {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
-} = require('discord.js');
-
-const db = require('../database/db');
+const { ActionRowBuilder, StringSelectMenuBuilder } = require("discord.js");
 
 module.exports = {
-  data: { name: "db_inscription" },
+  data: {
+    name: "db_inscription"
+  },
 
   async execute(interaction) {
 
-    const guildId = interaction.guild.id;
-    const config = db.getConfig(guildId);
+    const select = new StringSelectMenuBuilder()
+      .setCustomId("birthday_date")
+      .setPlaceholder("Choisis ta date")
+      .addOptions([
+        {
+          label: "01/01",
+          value: "01/01"
+        },
+        {
+          label: "02/01",
+          value: "02/01"
+        },
+        {
+          label: "03/01",
+          value: "03/01"
+        }
+      ]);
 
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('vip_join')
-        .setLabel(config.vip_button_label)
-        .setStyle(ButtonStyle.Success)
-    );
+    const row = new ActionRowBuilder().addComponents(select);
 
-    await interaction.channel.send({
-      content: config.vip_message,
-      components: [row]
-    });
-
-    await interaction.reply({
-      content: "✅ Message VIP envoyé",
+    return interaction.reply({
+      content: "📅 Choisis ta date d'anniversaire",
+      components: [row],
       ephemeral: true
     });
   }
