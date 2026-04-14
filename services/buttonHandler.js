@@ -6,32 +6,31 @@ async function handleButtons(interaction) {
   const guildId = interaction.guild.id;
   const userId = interaction.user.id;
 
-  // VIP JOIN
+  /* ================= VIP ================= */
+
   if (id === 'vip_join') {
 
-    db.prepare(`
-      INSERT OR IGNORE INTO users (user_id, guild_id)
-      VALUES (?, ?)
-    `).run(userId, guildId);
-
-    db.prepare(`
-      UPDATE users
-      SET is_vip = 1
-      WHERE user_id = ? AND guild_id = ?
-    `).run(userId, guildId);
+    db.upsertUser(userId, guildId, {
+      is_vip: 1
+    });
 
     return interaction.reply({
-      content: "⭐ Tu es VIP dans le générique !",
+      content: "⭐ Tu es maintenant VIP dans le générique !",
       ephemeral: true
     });
   }
+
+  /* ================= ADD BIRTHDAY ================= */
 
   if (id === 'add_birthday') {
+
     return interaction.reply({
-      content: "Envoie ta date format YYYY-MM-DD",
+      content: "📅 Envoie ta date d'anniversaire (format: YYYY-MM-DD)",
       ephemeral: true
     });
   }
+
+  /* ================= CLOSE ================= */
 
   if (id === 'close_menu') {
     return interaction.message.delete();
