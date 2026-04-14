@@ -1,16 +1,13 @@
 function startBot() {
-  console.log("🚀 STARTING BOT...");
+  console.log("🚀 DÉMARRAGE BOT...");
 
   try {
     require('./index.js');
   } catch (err) {
-    console.error("💥 CRASH DETECTED:", err);
+    console.error("💥 CRASH:", err);
 
-    console.log("🔁 Restart in 5 seconds...");
-
-    setTimeout(() => {
-      startBot();
-    }, 5000);
+    console.log("🔁 Redémarrage dans 5 secondes...");
+    setTimeout(startBot, 5000);
   }
 }
 
