@@ -1,13 +1,13 @@
 {
   "name": "dorothee-bot",
   "version": "1.0.0",
-  "description": "Bot anniversaire KaporTV",
+  "description": "Bot anniversaire Kapor TV",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
     "discord.js": "^14.11.1",
-    "better-sqlite3": "^9.4.0"
+    "sqlite3": "^5.1.7"
   }
 }
