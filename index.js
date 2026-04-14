@@ -68,7 +68,6 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 // ================= STATE =================
 
 const waiting = new Map();
-const confirmReset = new Map();
 
 // ================= READY =================
 
@@ -101,7 +100,7 @@ function isThisWeek(dateStr) {
   return date >= start && date <= end;
 }
 
-// ================= MENU =================
+// ================= INTERACTIONS =================
 
 client.on(Events.InteractionCreate, async (interaction) => {
 
@@ -110,7 +109,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
 
-    // ================= /db_menu =================
+    // ================= MENU =================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_menu") {
 
       const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
@@ -151,6 +150,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
       });
     }
 
+    // ================= BUTTON: EDIT DATE (FIX BUG ICI) =================
+    if (interaction.isButton() && interaction.customId === "date_edit") {
+
+      waiting.set(interaction.user.id, {
+        field: "anniv_date",
+        guildId
+      });
+
+      return interaction.reply({
+        content: "✍️ Envoie ta date d'anniversaire au format **JJ/MM** dans le salon.",
+        ephemeral: true
+      });
+    }
+
     // ================= DELETE DATE =================
     if (interaction.isButton() && interaction.customId === "date_delete") {
 
@@ -162,23 +175,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return interaction.reply({ content: "🗑️ Date supprimée", ephemeral: true });
     }
 
-    // ================= ADMIN RESET =================
-    if (interaction.isButton() && interaction.customId === "reset_confirm") {
-
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
-      }
-
-      db.run("DELETE FROM anniversaires WHERE guild=?", [guildId]);
-
-      confirmReset.delete(guildId);
-
-      return interaction.reply("🧨 Liste entièrement vidée !");
-    }
-
-    if (interaction.isButton() && interaction.customId === "reset_cancel") {
-      confirmReset.delete(guildId);
-      return interaction.reply({ content: "❌ Annulé", ephemeral: true });
+    // ================= CLOSE =================
+    if (interaction.isButton() && interaction.customId === "close") {
+      return interaction.message.delete().catch(() => {});
     }
 
     // ================= ADMIN PANEL =================
@@ -193,43 +192,18 @@ client.on(Events.InteractionCreate, async (interaction) => {
           { label: "🧨 RESET LISTE", value: "reset" }
         );
 
-      const row = new ActionRowBuilder().addComponents(menu);
-
-      return interaction.reply({ components: [row], ephemeral: true });
+      return interaction.reply({
+        components: [new ActionRowBuilder().addComponents(menu)],
+        ephemeral: true
+      });
     }
 
-    // ================= RESET MENU =================
+    // ================= ADMIN MENU =================
     if (interaction.isStringSelectMenu() && interaction.customId === "admin_menu") {
 
       const value = interaction.values[0];
 
-      // RESET CONFIRMATION
-      if (value === "reset") {
-
-        confirmReset.set(guildId, true);
-
-        const row = new ActionRowBuilder().addComponents(
-          new ButtonBuilder()
-            .setCustomId("reset_confirm")
-            .setLabel("✅ Oui supprimer")
-            .setStyle(ButtonStyle.Danger),
-
-          new ButtonBuilder()
-            .setCustomId("reset_cancel")
-            .setLabel("❌ Annuler")
-            .setStyle(ButtonStyle.Secondary)
-        );
-
-        return interaction.reply({
-          content: "⚠️ Voulez-vous réellement vider toute la liste ?\nAction irréversible.",
-          components: [row],
-          ephemeral: true
-        });
-      }
-
-      // ROLE INPUT
       if (value === "role") {
-
         waiting.set(interaction.user.id, { field: "role", guildId });
 
         return interaction.reply({
@@ -238,9 +212,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      // CHANNEL INPUT
       if (value === "channel") {
-
         waiting.set(interaction.user.id, { field: "anniv_channel", guildId });
 
         return interaction.reply({
@@ -248,80 +220,77 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ephemeral: true
         });
       }
+
+      if (value === "reset") {
+
+        return interaction.reply({
+          content: "⚠️ Voulez-vous vraiment vider TOUTE la liste ?",
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder()
+                .setCustomId("reset_yes")
+                .setLabel("✅ Oui")
+                .setStyle(ButtonStyle.Danger),
+
+              new ButtonBuilder()
+                .setCustomId("reset_no")
+                .setLabel("❌ Annuler")
+                .setStyle(ButtonStyle.Secondary)
+            )
+          ],
+          ephemeral: true
+        });
+      }
     }
 
-    // ================= VIP PANEL =================
-    if (interaction.isChatInputCommand() && interaction.commandName === "db_inscription") {
+    // ================= RESET CONFIRM =================
+    if (interaction.isButton() && interaction.customId === "reset_yes") {
 
       if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
         return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
       }
 
+      db.run("DELETE FROM anniversaires WHERE guild=?", [guildId]);
+
+      return interaction.reply({ content: "🧨 Liste supprimée", ephemeral: true });
+    }
+
+    if (interaction.isButton() && interaction.customId === "reset_no") {
+      return interaction.reply({ content: "❌ Annulé", ephemeral: true });
+    }
+
+    // ================= VIP =================
+    if (interaction.isChatInputCommand() && interaction.commandName === "db_inscription") {
+
       const embed = new EmbedBuilder()
-        .setTitle("⭐ VIP INSCRIPTION")
+        .setTitle("⭐ VIP")
         .setDescription("Clique pour devenir VIP")
         .setColor(0xffcc00);
 
       const btn = new ButtonBuilder()
         .setCustomId("vip_join")
-        .setLabel("⭐ VIP")
-        .setStyle(ButtonStyle.Success);
-
-      const close = new ButtonBuilder()
-        .setCustomId("close")
-        .setLabel("❌ Fermer")
-        .setStyle(ButtonStyle.Danger);
+        .setStyle(ButtonStyle.Success)
+        .setLabel("⭐ VIP");
 
       return interaction.channel.send({
         embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(btn, close)]
+        components: [new ActionRowBuilder().addComponents(btn)]
       });
     }
 
-    // ================= LISTE =================
+    // ================= LIST =================
     if (interaction.isChatInputCommand() && interaction.commandName === "db_list") {
 
       db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
         const week = rows.filter(r => isThisWeek(r.date));
 
-        if (!week.length) {
-          return interaction.reply("📭 Aucun anniversaire cette semaine");
-        }
+        const text =
+week.length
+? week.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n")
+: "📭 Aucun anniversaire cette semaine";
 
-        const vip = [];
-        const novip = [];
-
-        let done = 0;
-
-        week.forEach(r => {
-
-          db.get("SELECT * FROM vip WHERE guild=? AND user=?", [guildId, r.user], (e, v) => {
-
-            if (v) vip.push(r);
-            else novip.push(r);
-
-            done++;
-
-            if (done === week.length) {
-
-              const text =
-`🎂 **LISTE SEMAINE**
-
-⭐ VIP
-${vip.length ? vip.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n") : "Aucun"}
-
-👤 NON VIP
-${novip.length ? novip.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n") : "Aucun"}
-
----
-
-🎉 Anniversaires`;
-
-              interaction.reply({ content: text });
-            }
-          });
-        });
+        interaction.reply({ content: text });
       });
     }
 
@@ -341,7 +310,26 @@ client.on("messageCreate", (msg) => {
 
   waiting.delete(msg.author.id);
 
+  if (wait.field === "anniv_date") {
+
+    const date = msg.content.trim();
+
+    if (!/^\d{1,2}\/\d{1,2}$/.test(date)) {
+      return msg.reply("❌ Format invalide (JJ/MM)");
+    }
+
+    db.run(
+      `INSERT INTO anniversaires (guild, user, date)
+       VALUES (?, ?, ?)
+       ON CONFLICT(guild, user) DO UPDATE SET date=?`,
+      [wait.guildId, msg.author.id, date, date]
+    );
+
+    return msg.reply("🎂 Date enregistrée !");
+  }
+
   if (wait.field === "role") {
+
     const role = msg.mentions.roles.first();
     if (!role) return msg.reply("❌ rôle invalide");
 
@@ -355,6 +343,7 @@ client.on("messageCreate", (msg) => {
   }
 
   if (wait.field === "anniv_channel") {
+
     const ch = msg.mentions.channels.first();
     if (!ch) return msg.reply("❌ salon invalide");
 
@@ -368,7 +357,7 @@ client.on("messageCreate", (msg) => {
   }
 });
 
-// ================= AUTO ANNIVERSAIRE =================
+// ================= AUTO ANNIV =================
 
 async function checkBirthdays() {
 
