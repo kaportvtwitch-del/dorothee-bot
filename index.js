@@ -1,6 +1,8 @@
 const fs = require('fs');
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 
+const db = require('./database/db');
+
 const TOKEN = process.env.TOKEN;
 
 const client = new Client({
@@ -12,23 +14,32 @@ const client = new Client({
 
 client.commands = new Collection();
 
-// LOAD COMMANDS
+/* ================= LOAD COMMANDS ================= */
+
 for (const file of fs.readdirSync('./commands')) {
   if (!file.endsWith('.js')) continue;
+
   const cmd = require(`./commands/${file}`);
   client.commands.set(cmd.data.name, cmd);
 }
 
-// READY
+/* ================= READY ================= */
+
 client.once('ready', () => {
-  console.log(`✅ Connecté en tant que ${client.user.tag}`);
+  console.log(`✅ Connecté : ${client.user.tag}`);
 
   const { startBirthdayJob } = require('./services/birthdayService');
   startBirthdayJob(client);
 });
 
-// INTERACTIONS
+/* ================= INTERACTIONS ================= */
+
 client.on('interactionCreate', async (interaction) => {
+
+  if (!interaction.guild) return;
+
+  // init guild auto
+  db.initGuild(interaction.guild.id);
 
   if (interaction.isChatInputCommand()) {
     const cmd = client.commands.get(interaction.commandName);
