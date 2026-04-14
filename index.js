@@ -1,123 +1,84 @@
 console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
-console.log("🧠 PROCESS ID:", process.pid);
 
-const fs = require('fs');
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
-
-/* ================= SAFE REQUIRE ================= */
-
-let db = null;
-let handleButtons = null;
-let temp = {};
-
-try {
-  db = require('./database/db');
-} catch (e) {
-  console.error("❌ DB ERROR:", e);
+if (global.__BOT_RUNNING__) {
+  console.log("⛔ BOT DÉJÀ LANCÉ -> STOP");
+  process.exit(0);
 }
+global.__BOT_RUNNING__ = true;
 
-try {
-  const handler = require('./services/buttonHandler');
-  handleButtons = handler.handleButtons;
-  temp = handler.temp || {};
-} catch (e) {
-  console.error("❌ BUTTON HANDLER ERROR:", e);
-}
-
-/* ================= TOKEN ================= */
-
-const TOKEN = process.env.TOKEN;
-
-if (!TOKEN) {
-  console.error("❌ TOKEN MANQUANT");
-  process.exit(1);
-}
-
-/* ================= CLIENT ================= */
+const fs = require("fs");
+const path = require("path");
+const {
+  Client,
+  Collection,
+  GatewayIntentBits,
+  Partials
+} = require("discord.js");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildMessages
+  ],
+  partials: [Partials.Channel]
 });
 
 client.commands = new Collection();
 
-/* ================= SAFE LOAD COMMANDS ================= */
+/* LOAD COMMANDS */
+const commandFiles = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
 
-try {
-  const commandFiles = fs.readdirSync('./commands');
-
-  for (const file of commandFiles) {
-    if (!file.endsWith('.js')) continue;
-
-    try {
-      const cmd = require(`./commands/${file}`);
-
-      if (!cmd.data || !cmd.data.name) {
-        console.warn(`⚠️ Commande ignorée: ${file}`);
-        continue;
-      }
-
-      client.commands.set(cmd.data.name, cmd);
-      console.log(`✅ Commande chargée: ${cmd.data.name}`);
-
-    } catch (err) {
-      console.error(`❌ ERREUR CMD ${file}:`, err);
-    }
+for (const file of commandFiles) {
+  const cmd = require(`./commands/${file}`);
+  if (!cmd.data || !cmd.execute) {
+    console.log("⚠️ Commande ignorée:", file);
+    continue;
   }
-
-} catch (err) {
-  console.error("❌ COMMAND FOLDER ERROR:", err);
+  client.commands.set(cmd.data.name, cmd);
+  console.log("✅ Commande chargée:", cmd.data.name);
 }
 
-/* ================= READY ================= */
-
-client.once('ready', () => {
-  console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
-  console.log("🎂 Birthday system ON");
-});
-
-/* ================= INTERACTIONS ================= */
-
-client.on('interactionCreate', async (interaction) => {
+/* INTERACTIONS */
+client.on("interactionCreate", async (interaction) => {
   try {
-
-    if (!interaction.guild) return;
-
-    if (db?.initGuild) {
-      db.initGuild(interaction.guild.id);
-    }
-
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
-      if (cmd) return await cmd.execute(interaction);
+      if (!cmd) return;
+
+      await cmd.execute(interaction, client);
     }
 
     if (interaction.isButton()) {
-      if (handleButtons) return await handleButtons(interaction);
+      const handler = require("./services/interactions");
+      await handler.handleButton(interaction, client);
     }
 
     if (interaction.isStringSelectMenu()) {
+      const handler = require("./services/interactions");
+      await handler.handleSelect(interaction, client);
+    }
 
-      const data = temp[interaction.user.id];
-      if (!data) return interaction.deferUpdate();
-
-      if (interaction.customId === 'day') data.day = interaction.values[0];
-      if (interaction.customId === 'month') data.month = interaction.values[0];
-      if (interaction.customId === 'year') data.year = interaction.values[0];
-
-      return interaction.deferUpdate();
+    if (interaction.isModalSubmit()) {
+      const handler = require("./services/interactions");
+      await handler.handleModal(interaction, client);
     }
 
   } catch (err) {
     console.error("💥 INTERACTION ERROR:", err);
+    if (!interaction.replied) {
+      interaction.reply({
+        content: "❌ Erreur interaction",
+        ephemeral: true
+      });
+    }
   }
 });
 
-/* ================= LOGIN ================= */
+/* LOGIN */
+client.once("ready", () => {
+  console.log("🚀 BOT CONNECTÉ :", client.user.tag);
+  console.log("🎂 Birthday system ON");
+});
 
-client.login(TOKEN)
-  .then(() => console.log("🔐 Login Discord OK"))
-  .catch(err => console.error("❌ LOGIN ERROR:", err));
+client.login(process.env.TOKEN);
