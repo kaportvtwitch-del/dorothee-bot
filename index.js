@@ -1,16 +1,10 @@
-console.log("🔥 INDEX LANCÉ");
-const fs = require('fs');
-const {
-  Client,
-  GatewayIntentBits,
-  Collection
-} = require('discord.js');
+console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
 
+const fs = require('fs');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const db = require('./database/db');
 
-/* ================= SAFE IMPORT ================= */
-
-let handleButtons;
+let handleButtons = null;
 let temp = {};
 
 try {
@@ -18,10 +12,8 @@ try {
   handleButtons = handler.handleButtons;
   temp = handler.temp || {};
 } catch (err) {
-  console.error("❌ ERREUR buttonHandler:", err);
+  console.error("❌ buttonHandler error:", err);
 }
-
-/* ================= TOKEN ================= */
 
 const TOKEN = process.env.TOKEN;
 
@@ -30,21 +22,13 @@ if (!TOKEN) {
   process.exit(1);
 }
 
-/* ================= CLIENT ================= */
-
-console.log("🔥 INDEX LANCÉ");
-
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers
-  ]
+  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 client.commands = new Collection();
 
-/* ================= LOAD COMMANDS ================= */
-
+/* LOAD COMMANDS */
 const commandFiles = fs.readdirSync('./commands');
 
 for (const file of commandFiles) {
@@ -58,42 +42,29 @@ for (const file of commandFiles) {
   console.log(`✅ Commande chargée: ${cmd.data.name}`);
 }
 
-/* ================= READY ================= */
-
 client.once('ready', () => {
   console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
 });
 
-/* ================= INTERACTIONS ================= */
-
+/* INTERACTIONS */
 client.on('interactionCreate', async (interaction) => {
-
   try {
 
     if (!interaction.guild) return;
 
     db.initGuild(interaction.guild.id);
 
-    /* ===== COMMAND ===== */
-
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
-      if (cmd) return await cmd.execute(interaction);
+      if (cmd) return cmd.execute(interaction);
     }
-
-    /* ===== BUTTON ===== */
 
     if (interaction.isButton()) {
-      if (handleButtons) return await handleButtons(interaction);
+      if (handleButtons) return handleButtons(interaction);
     }
 
-    /* ===== SELECT ===== */
-
     if (interaction.isStringSelectMenu()) {
-
-      const userId = interaction.user.id;
-      const data = temp[userId];
-
+      const data = temp[interaction.user.id];
       if (!data) return interaction.deferUpdate();
 
       if (interaction.customId === 'day') data.day = interaction.values[0];
@@ -108,8 +79,6 @@ client.on('interactionCreate', async (interaction) => {
   }
 });
 
-/* ================= LOGIN ================= */
-
 client.login(TOKEN)
   .then(() => console.log("🔐 Login Discord OK"))
-  .catch(err => console.error("❌ LOGIN ERROR:", err));
+  .catch(console.error);
