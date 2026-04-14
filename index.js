@@ -19,12 +19,15 @@ const {
 
 const sqlite3 = require("sqlite3").verbose();
 
+console.log("🚀 BOT START");
+
+// ✅ INTENTS SAFE (pas d’erreur)
 const client = new Client({
-  intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
+  intents: [GatewayIntentBits.Guilds]
 });
 
-// DB
-const db = new sqlite3.Database("/home/u585460519/data/anniv.db");
+// ✅ DB FIX (plus d’erreur SQLITE)
+const db = new sqlite3.Database("./anniv.db");
 
 // TABLES
 db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
@@ -60,8 +63,6 @@ client.once("ready", async () => {
   } catch (err) {
     console.error(err);
   }
-
-  setInterval(checkBirthdays, 60000);
 });
 
 // =======================
@@ -107,14 +108,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
           new ButtonBuilder().setCustomId("date").setLabel("🎂 Je participe").setStyle(ButtonStyle.Success)
         );
 
-        return interaction.reply({
-          content: "✅ Panel envoyé",
-          ephemeral: true
-        }).then(() => {
-          interaction.channel.send({
-            content: "🎉 Clique pour t'inscrire !",
-            components: [row]
-          });
+        await interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
+
+        return interaction.channel.send({
+          content: "🎉 Clique pour t'inscrire !",
+          components: [row]
         });
       }
 
@@ -196,7 +194,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // TITRE
       if (interaction.customId === "title") {
 
-        const modal = new ModalBuilder().setCustomId("title_modal").setTitle("Titre");
+        const modal = new ModalBuilder().setCustomId("title_modal").setTitle("Modifier titre");
 
         const input = new TextInputBuilder()
           .setCustomId("title_input")
@@ -211,7 +209,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       // MESSAGE
       if (interaction.customId === "msg") {
 
-        const modal = new ModalBuilder().setCustomId("msg_modal").setTitle("Message");
+        const modal = new ModalBuilder().setCustomId("msg_modal").setTitle("Modifier message");
 
         const input = new TextInputBuilder()
           .setCustomId("msg_input")
@@ -286,50 +284,5 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
   }
 });
-
-// =======================
-// CHECK ANNIVERSAIRES
-// =======================
-
-async function checkBirthdays() {
-
-  const today = new Date();
-  const d = today.getDate();
-  const m = today.getMonth() + 1;
-
-  db.all("SELECT * FROM anniversaires", async (err, rows) => {
-
-    for (const row of rows) {
-
-      const [dd, mm, yy] = row.date.split("/");
-
-      if (parseInt(dd) === d && parseInt(mm) === m) {
-
-        try {
-          const guild = await client.guilds.fetch(row.guild);
-          const member = await guild.members.fetch(row.user);
-
-          db.get("SELECT role FROM settings WHERE guild=?", [row.guild], async (err, config) => {
-
-            if (!config?.role) return;
-
-            const role = guild.roles.cache.get(config.role);
-            if (!role) return;
-
-            await member.roles.add(role);
-
-            const age = new Date().getFullYear() - yy;
-
-            if (age % 10 === 0) {
-              member.send(`🎉 Tu passes une dizaine (${age}) !!!`);
-            }
-
-          });
-
-        } catch (e) {}
-      }
-    }
-  });
-}
 
 client.login(process.env.DISCORD_TOKEN);
