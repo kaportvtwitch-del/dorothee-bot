@@ -1,396 +1,43 @@
-process.on("uncaughtException", console.error);
-process.on("unhandledRejection", console.error);
-
-const {
-  Client,
-  GatewayIntentBits,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle,
-  Events,
-  PermissionsBitField,
-  REST,
-  Routes,
-  SlashCommandBuilder,
-  EmbedBuilder,
-  StringSelectMenuBuilder
-} = require("discord.js");
-
-const sqlite3 = require("sqlite3").verbose();
-
-// ================= CLIENT =================
+require('dotenv').config();
+const fs = require('fs');
+const { Client, GatewayIntentBits, Collection } = require('discord.js');
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
+    GatewayIntentBits.GuildMembers
   ]
 });
 
-// ================= DB =================
+client.commands = new Collection();
 
-const db = new sqlite3.Database("/tmp/anniv.db");
-
-db.serialize(() => {
-
-  db.run(`CREATE TABLE IF NOT EXISTS anniversaires (
-    guild TEXT,
-    user TEXT,
-    date TEXT,
-    PRIMARY KEY (guild, user)
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS vip (
-    guild TEXT,
-    user TEXT,
-    PRIMARY KEY (guild, user)
-  )`);
-
-  db.run(`CREATE TABLE IF NOT EXISTS settings (
-    guild TEXT PRIMARY KEY,
-    role TEXT,
-    anniv_channel TEXT
-  )`);
-});
-
-// ================= COMMANDS =================
-
-const commands = [
-  new SlashCommandBuilder().setName("db_menu").setDescription("🎛️ Menu principal"),
-  new SlashCommandBuilder().setName("db_inscription").setDescription("⭐ VIP panel"),
-  new SlashCommandBuilder().setName("db_list").setDescription("📅 Liste semaine")
-];
-
-const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
-
-// ================= STATE =================
-
-const waiting = new Map();
-
-// ================= READY =================
-
-client.once("ready", async () => {
-
-  console.log(`✅ CONNECTÉ : ${client.user.tag}`);
-
-  await rest.put(
-    Routes.applicationCommands(process.env.CLIENT_ID),
-    { body: commands }
-  );
-
-  setInterval(checkBirthdays, 60000);
-});
-
-// ================= UTILS =================
-
-function isThisWeek(dateStr) {
-  const [d, m] = dateStr.split("/").map(Number);
-
-  const now = new Date();
-  const date = new Date(now.getFullYear(), m - 1, d);
-
-  const start = new Date(now);
-  start.setDate(now.getDate() - now.getDay());
-
-  const end = new Date(start);
-  end.setDate(start.getDate() + 7);
-
-  return date >= start && date <= end;
+// LOAD COMMANDS
+for (const file of fs.readdirSync('./commands')) {
+  if (!file.endsWith('.js')) continue;
+  const cmd = require(`./commands/${file}`);
+  client.commands.set(cmd.data.name, cmd);
 }
 
-// ================= INTERACTIONS =================
+// READY
+client.once('ready', () => {
+  console.log(`✅ Connecté en tant que ${client.user.tag}`);
 
-client.on(Events.InteractionCreate, async (interaction) => {
+  const { startBirthdayJob } = require('./services/birthdayService');
+  startBirthdayJob(client);
+});
 
-  const guildId = interaction.guild?.id;
-  if (!guildId) return;
+// INTERACTIONS
+client.on('interactionCreate', async (interaction) => {
 
-  try {
+  if (interaction.isChatInputCommand()) {
+    const cmd = client.commands.get(interaction.commandName);
+    if (cmd) return cmd.execute(interaction);
+  }
 
-    // ================= MENU =================
-    if (interaction.isChatInputCommand() && interaction.commandName === "db_menu") {
-
-      const isAdmin = interaction.member.permissions.has(PermissionsBitField.Flags.Administrator);
-
-      const row = new ActionRowBuilder().addComponents(
-
-        new ButtonBuilder()
-          .setCustomId("date_edit")
-          .setLabel("✏️ Ajouter / Modifier ma date")
-          .setStyle(ButtonStyle.Success),
-
-        new ButtonBuilder()
-          .setCustomId("date_delete")
-          .setLabel("🗑️ Supprimer ma date")
-          .setStyle(ButtonStyle.Danger),
-
-        ...(isAdmin ? [
-          new ButtonBuilder()
-            .setCustomId("admin_panel")
-            .setLabel("⚙️ Gestion")
-            .setStyle(ButtonStyle.Primary)
-        ] : []),
-
-        new ButtonBuilder()
-          .setCustomId("close")
-          .setLabel("❌ Fermer")
-          .setStyle(ButtonStyle.Secondary)
-      );
-
-      const embed = new EmbedBuilder()
-        .setTitle("🎂 ANNIVERSAIRES SYSTEM")
-        .setColor(0x8e44ad);
-
-      return interaction.reply({
-        embeds: [embed],
-        components: [row],
-        ephemeral: true
-      });
-    }
-
-    // ================= BUTTON: EDIT DATE (FIX BUG ICI) =================
-    if (interaction.isButton() && interaction.customId === "date_edit") {
-
-      waiting.set(interaction.user.id, {
-        field: "anniv_date",
-        guildId
-      });
-
-      return interaction.reply({
-        content: "✍️ Envoie ta date d'anniversaire au format **JJ/MM** dans le salon.",
-        ephemeral: true
-      });
-    }
-
-    // ================= DELETE DATE =================
-    if (interaction.isButton() && interaction.customId === "date_delete") {
-
-      db.run(
-        "DELETE FROM anniversaires WHERE guild=? AND user=?",
-        [guildId, interaction.user.id]
-      );
-
-      return interaction.reply({ content: "🗑️ Date supprimée", ephemeral: true });
-    }
-
-    // ================= CLOSE =================
-    if (interaction.isButton() && interaction.customId === "close") {
-      return interaction.message.delete().catch(() => {});
-    }
-
-    // ================= ADMIN PANEL =================
-    if (interaction.isButton() && interaction.customId === "admin_panel") {
-
-      const menu = new StringSelectMenuBuilder()
-        .setCustomId("admin_menu")
-        .setPlaceholder("⚙️ Gestion")
-        .addOptions(
-          { label: "🎭 Rôle jour J", value: "role" },
-          { label: "📢 Salon anniversaire", value: "channel" },
-          { label: "🧨 RESET LISTE", value: "reset" }
-        );
-
-      return interaction.reply({
-        components: [new ActionRowBuilder().addComponents(menu)],
-        ephemeral: true
-      });
-    }
-
-    // ================= ADMIN MENU =================
-    if (interaction.isStringSelectMenu() && interaction.customId === "admin_menu") {
-
-      const value = interaction.values[0];
-
-      if (value === "role") {
-        waiting.set(interaction.user.id, { field: "role", guildId });
-
-        return interaction.reply({
-          content: "✍️ Mentionne un rôle",
-          ephemeral: true
-        });
-      }
-
-      if (value === "channel") {
-        waiting.set(interaction.user.id, { field: "anniv_channel", guildId });
-
-        return interaction.reply({
-          content: "📢 Mentionne un salon",
-          ephemeral: true
-        });
-      }
-
-      if (value === "reset") {
-
-        return interaction.reply({
-          content: "⚠️ Voulez-vous vraiment vider TOUTE la liste ?",
-          components: [
-            new ActionRowBuilder().addComponents(
-              new ButtonBuilder()
-                .setCustomId("reset_yes")
-                .setLabel("✅ Oui")
-                .setStyle(ButtonStyle.Danger),
-
-              new ButtonBuilder()
-                .setCustomId("reset_no")
-                .setLabel("❌ Annuler")
-                .setStyle(ButtonStyle.Secondary)
-            )
-          ],
-          ephemeral: true
-        });
-      }
-    }
-
-    // ================= RESET CONFIRM =================
-    if (interaction.isButton() && interaction.customId === "reset_yes") {
-
-      if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
-        return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
-      }
-
-      db.run("DELETE FROM anniversaires WHERE guild=?", [guildId]);
-
-      return interaction.reply({ content: "🧨 Liste supprimée", ephemeral: true });
-    }
-
-    if (interaction.isButton() && interaction.customId === "reset_no") {
-      return interaction.reply({ content: "❌ Annulé", ephemeral: true });
-    }
-
-    // ================= VIP =================
-    if (interaction.isChatInputCommand() && interaction.commandName === "db_inscription") {
-
-      const embed = new EmbedBuilder()
-        .setTitle("⭐ VIP")
-        .setDescription("Clique pour devenir VIP")
-        .setColor(0xffcc00);
-
-      const btn = new ButtonBuilder()
-        .setCustomId("vip_join")
-        .setStyle(ButtonStyle.Success)
-        .setLabel("⭐ VIP");
-
-      return interaction.channel.send({
-        embeds: [embed],
-        components: [new ActionRowBuilder().addComponents(btn)]
-      });
-    }
-
-    // ================= LIST =================
-    if (interaction.isChatInputCommand() && interaction.commandName === "db_list") {
-
-      db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
-
-        const week = rows.filter(r => isThisWeek(r.date));
-
-        const text =
-week.length
-? week.map(x => `🎂 <@${x.user}> → **${x.date}**`).join("\n")
-: "📭 Aucun anniversaire cette semaine";
-
-        interaction.reply({ content: text });
-      });
-    }
-
-  } catch (err) {
-    console.error(err);
+  if (interaction.isButton()) {
+    const { handleButtons } = require('./services/buttonHandler');
+    return handleButtons(interaction);
   }
 });
 
-// ================= MESSAGE INPUT =================
-
-client.on("messageCreate", (msg) => {
-
-  if (msg.author.bot) return;
-
-  const wait = waiting.get(msg.author.id);
-  if (!wait) return;
-
-  waiting.delete(msg.author.id);
-
-  if (wait.field === "anniv_date") {
-
-    const date = msg.content.trim();
-
-    if (!/^\d{1,2}\/\d{1,2}$/.test(date)) {
-      return msg.reply("❌ Format invalide (JJ/MM)");
-    }
-
-    db.run(
-      `INSERT INTO anniversaires (guild, user, date)
-       VALUES (?, ?, ?)
-       ON CONFLICT(guild, user) DO UPDATE SET date=?`,
-      [wait.guildId, msg.author.id, date, date]
-    );
-
-    return msg.reply("🎂 Date enregistrée !");
-  }
-
-  if (wait.field === "role") {
-
-    const role = msg.mentions.roles.first();
-    if (!role) return msg.reply("❌ rôle invalide");
-
-    db.run(`INSERT INTO settings (guild, role)
-    VALUES (?, ?)
-    ON CONFLICT(guild) DO UPDATE SET role=?`,
-      [wait.guildId, role.id, role.id]
-    );
-
-    return msg.reply("🎭 Rôle enregistré");
-  }
-
-  if (wait.field === "anniv_channel") {
-
-    const ch = msg.mentions.channels.first();
-    if (!ch) return msg.reply("❌ salon invalide");
-
-    db.run(`INSERT INTO settings (guild, anniv_channel)
-    VALUES (?, ?)
-    ON CONFLICT(guild) DO UPDATE SET anniv_channel=?`,
-      [wait.guildId, ch.id, ch.id]
-    );
-
-    return msg.reply("📢 Salon enregistré");
-  }
-});
-
-// ================= AUTO ANNIV =================
-
-async function checkBirthdays() {
-
-  const today = new Date();
-  const d = today.getDate();
-  const m = today.getMonth() + 1;
-
-  db.all("SELECT * FROM anniversaires", async (err, rows) => {
-
-    for (const r of rows) {
-
-      const [dd, mm] = r.date.split("/").map(Number);
-
-      const guild = await client.guilds.fetch(r.guild).catch(() => null);
-      if (!guild) continue;
-
-      const member = await guild.members.fetch(r.user).catch(() => null);
-      if (!member) continue;
-
-      db.get("SELECT role FROM settings WHERE guild=?", [r.guild], async (e, cfg) => {
-
-        const role = cfg?.role ? guild.roles.cache.get(cfg.role) : null;
-
-        if (dd === d && mm === m && role) {
-          await member.roles.add(role).catch(() => {});
-        } else if (role) {
-          await member.roles.remove(role).catch(() => {});
-        }
-      });
-    }
-  });
-}
-
-// ================= LOGIN =================
-
-client.login(process.env.DISCORD_TOKEN);
+client.login(process.env.TOKEN);

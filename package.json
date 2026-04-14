@@ -1,12 +1,16 @@
 {
-  "name": "dorothee-bot",
+  "name": "discord-birthday-bot",
   "version": "1.0.0",
   "main": "index.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node index.js"
+    "start": "node index.js",
+    "deploy": "node commands/deploy-commands.js"
   },
   "dependencies": {
-    "discord.js": "^14.11.1",
-    "sqlite3": "^5.1.7"
+    "discord.js": "^14.16.3",
+    "dotenv": "^16.4.5",
+    "better-sqlite3": "^9.6.0",
+    "node-cron": "^3.0.3"
   }
 }
