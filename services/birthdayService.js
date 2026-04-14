@@ -7,11 +7,13 @@ function startBirthdayJob(client) {
 
     const today = new Date().toISOString().slice(5, 10);
 
-    const users = db.prepare(`
-      SELECT * FROM users
-    `).all();
+    const users = db.getUsersForAllGuilds?.() || null;
 
-    users.forEach(user => {
+    // fallback simple (multi-guild safe)
+    const fs = require('fs');
+    const data = JSON.parse(fs.readFileSync('./database.json'));
+
+    data.users.forEach(user => {
 
       if (!user.birthday) return;
 
