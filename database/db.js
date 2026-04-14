@@ -1,36 +1,88 @@
-const Database = require('better-sqlite3');
+const fs = require('fs');
 
-const db = new Database('birthday.sqlite');
+const DB_FILE = './database.json';
 
-// USERS (multi-guild)
-db.prepare(`
-CREATE TABLE IF NOT EXISTS users (
-  user_id TEXT,
-  guild_id TEXT,
-  birthday TEXT,
-  show_age INTEGER DEFAULT 0,
-  is_vip INTEGER DEFAULT 0,
-  PRIMARY KEY(user_id, guild_id)
-)
-`).run();
+// INIT FILE
+function init() {
+  if (!fs.existsSync(DB_FILE)) {
+    fs.writeFileSync(DB_FILE, JSON.stringify({
+      users: [],
+      guild_config: []
+    }, null, 2));
+  }
+}
 
-// CONFIG SERVEUR
-db.prepare(`
-CREATE TABLE IF NOT EXISTS guild_config (
-  guild_id TEXT PRIMARY KEY,
+function load() {
+  init();
+  return JSON.parse(fs.readFileSync(DB_FILE));
+}
 
-  gen_title TEXT DEFAULT 'GÉNÉRIQUE ANNIVERSAIRES',
-  gen_vip_title TEXT DEFAULT 'VIP',
-  gen_nonvip_title TEXT DEFAULT 'NON VIP',
-  gen_footer TEXT DEFAULT '🎉 Bon anniversaire !',
+function save(data) {
+  fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
 
-  birthday_channel_id TEXT,
-  vip_role_id TEXT,
+/* ===================== USERS ===================== */
 
-  birthday_message TEXT DEFAULT '🎂 Joyeux anniversaire !',
-  vip_message TEXT DEFAULT '⭐ Clique pour devenir VIP',
-  vip_button_label TEXT DEFAULT 'Devenir VIP'
-)
-`).run();
+function getUsers(guildId) {
+  const db = load();
+  return db.users.filter(u => u.guild_id === guildId);
+}
 
-module.exports = db;
+function upsertUser(userId, guildId, data = {}) {
+  const db = load();
+
+  let user = db.users.find(
+    u => u.user_id === userId && u.guild_id === guildId
+  );
+
+  if (!user) {
+    user = {
+      user_id: userId,
+      guild_id: guildId,
+      birthday: null,
+      show_age: 0,
+      is_vip: 0,
+      ...data
+    };
+    db.users.push(user);
+  } else {
+    Object.assign(user, data);
+  }
+
+  save(db);
+}
+
+/* ===================== CONFIG ===================== */
+
+function initGuild(guildId) {
+  const db = load();
+
+  const exists = db.guild_config.find(g => g.guild_id === guildId);
+  if (exists) return;
+
+  db.guild_config.push({
+    guild_id: guildId,
+
+    gen_title: "GÉNÉRIQUE ANNIVERSAIRES",
+    gen_vip_title: "VIP",
+    gen_nonvip_title: "NON VIP",
+    gen_footer: "🎉 Bon anniversaire !",
+
+    vip_message: "⭐ Clique pour devenir VIP",
+    vip_button_label: "Devenir VIP"
+  });
+
+  save(db);
+}
+
+function getConfig(guildId) {
+  const db = load();
+  return db.guild_config.find(g => g.guild_id === guildId);
+}
+
+module.exports = {
+  getUsers,
+  upsertUser,
+  initGuild,
+  getConfig
+};
