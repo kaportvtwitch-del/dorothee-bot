@@ -1,40 +1,27 @@
-const {
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
-} = require('discord.js');
+const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
 module.exports = {
   data: {
-    name: "db_menu",
-    description: "Menu anniversaire"
+    name: "db_menu"
   },
 
   async execute(interaction) {
-
-    // 🔥 OBLIGATOIRE → évite timeout Discord
-    await interaction.deferReply({ ephemeral: true });
-
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId('add_birthday')
-        .setLabel('Ajouter / modifier ma date')
+        .setCustomId("add_birthday")
+        .setLabel("Ajouter / Modifier")
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
-        .setCustomId('gestion')
-        .setLabel('Gestion')
-        .setStyle(ButtonStyle.Secondary),
-
-      new ButtonBuilder()
-        .setCustomId('close_menu')
-        .setLabel('Fermer')
+        .setCustomId("delete_birthday")
+        .setLabel("Supprimer")
         .setStyle(ButtonStyle.Danger)
     );
 
-    await interaction.editReply({
-      content: "🎂 Menu anniversaire",
-      components: [row]
+    return interaction.reply({
+      content: "🎂 Menu Anniversaire",
+      components: [row],
+      ephemeral: true
     });
   }
 };
