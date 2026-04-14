@@ -1,7 +1,12 @@
 const fs = require('fs');
-const { Client, GatewayIntentBits, Collection } = require('discord.js');
+const {
+  Client,
+  GatewayIntentBits,
+  Collection
+} = require('discord.js');
 
 const db = require('./database/db');
+const { handleButtons, temp } = require('./services/buttonHandler');
 
 const TOKEN = process.env.TOKEN;
 
@@ -84,9 +89,61 @@ client.on('interactionCreate', async (interaction) => {
     /* ===== BUTTON ===== */
 
     if (interaction.isButton()) {
-
-      const { handleButtons } = require('./services/buttonHandler');
       return await handleButtons(interaction);
+    }
+
+    /* ===== SELECT MENU (CALENDRIER) ===== */
+
+    if (interaction.isStringSelectMenu()) {
+
+      const userId = interaction.user.id;
+      const data = temp[userId];
+
+      if (!data) return;
+
+      if (interaction.customId === 'day') {
+        data.day = interaction.values[0];
+      }
+
+      if (interaction.customId === 'month') {
+        data.month = interaction.values[0];
+      }
+
+      if (interaction.customId === 'year') {
+        data.year = interaction.values[0];
+      }
+
+      return interaction.deferUpdate();
+    }
+
+    /* ===== MODAL (SI UTILISÉ PLUS TARD) ===== */
+
+    if (interaction.isModalSubmit()) {
+
+      if (interaction.customId === 'birthday_modal') {
+
+        const value = interaction.fields.getTextInputValue('date_input');
+
+        const [d, m, y] = value.split('/');
+
+        if (!d || !m || !y) {
+          return interaction.reply({
+            content: "❌ Format invalide",
+            flags: 64
+          });
+        }
+
+        const formatted = `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+
+        db.upsertUser(interaction.user.id, interaction.guild.id, {
+          birthday: formatted
+        });
+
+        return interaction.reply({
+          content: "✅ Date enregistrée !",
+          flags: 64
+        });
+      }
     }
 
   } catch (err) {
