@@ -3,7 +3,6 @@ const db = require('../database/db');
 /* ================= DATE PARSE ================= */
 
 function parseDate(input) {
-  // attendu : dd/mm/yyyy
   const parts = input.split('/');
 
   if (parts.length !== 3) return null;
@@ -12,7 +11,6 @@ function parseDate(input) {
 
   if (!day || !month || !year) return null;
 
-  // format DB → yyyy-mm-dd
   return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
 }
 
@@ -28,9 +26,10 @@ async function handleButtons(interaction) {
 
   if (id === 'add_birthday') {
 
-    await interaction.reply({
-      content: "📅 Envoie ta date au format **jj/mm/aaaa**",
-      ephemeral: true
+    await interaction.deferReply({ ephemeral: true });
+
+    await interaction.editReply({
+      content: "📅 Envoie ta date au format **jj/mm/aaaa**"
     });
 
     const filter = m => m.author.id === userId;
@@ -63,13 +62,14 @@ async function handleButtons(interaction) {
 
   if (id === 'vip_join') {
 
+    await interaction.deferReply({ ephemeral: true });
+
     db.upsertUser(userId, guildId, {
       is_vip: 1
     });
 
-    return interaction.reply({
-      content: "⭐ Tu es maintenant VIP !",
-      ephemeral: true
+    return interaction.editReply({
+      content: "⭐ Tu es maintenant VIP !"
     });
   }
 
@@ -77,16 +77,17 @@ async function handleButtons(interaction) {
 
   if (id === 'gestion') {
 
-    // ⚠️ IMPORTANT : répondre sinon "échec interaction"
-    return interaction.reply({
-      content: "⚙️ Menu admin en cours de création...",
-      ephemeral: true
+    await interaction.deferReply({ ephemeral: true });
+
+    return interaction.editReply({
+      content: "⚙️ Menu admin en cours de création..."
     });
   }
 
   /* ================= CLOSE ================= */
 
   if (id === 'close_menu') {
+
     return interaction.message.delete().catch(() => {});
   }
 }
