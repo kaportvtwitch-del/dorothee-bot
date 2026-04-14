@@ -1,11 +1,14 @@
 {
   "name": "discord-birthday-bot",
   "version": "1.0.0",
+  "description": "Bot Discord anniversaires avec système VIP et générateur Twitch",
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
     "deploy": "node deploy-commands.js"
   },
+  "author": "Kapor_TV",
+  "license": "ISC",
   "dependencies": {
     "discord.js": "^14.16.3",
     "node-cron": "^3.0.3"
