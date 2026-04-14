@@ -79,6 +79,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   try {
 
+    // =======================
+    // COMMANDES
+    // =======================
+
     if (interaction.isChatInputCommand()) {
 
       if (interaction.commandName === "db_menu") {
@@ -103,7 +107,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
         }
 
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
+        db.get("SELECT * FROM settings WHERE guild=?", [guildId], async (err, config) => {
 
           const bouton = config?.bouton || "🎂 Je participe";
           const panel = config?.panel || "🎉 Clique pour t'inscrire !";
@@ -112,7 +116,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
             new ButtonBuilder().setCustomId("vip_date").setLabel(bouton).setStyle(ButtonStyle.Success)
           );
 
-          interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
+          await interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
 
           interaction.channel.send({
             content: panel,
@@ -132,7 +136,24 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.update({ content: "❌ Fermé", components: [] });
       }
 
-      // VIP CLICK
+      // DATE NORMAL
+      if (interaction.customId === "date") {
+
+        const modal = new ModalBuilder()
+          .setCustomId("date_modal")
+          .setTitle("🎂 Date JJ/MM/AAAA");
+
+        const input = new TextInputBuilder()
+          .setCustomId("input")
+          .setLabel("Ex: 15/08/1998")
+          .setStyle(TextInputStyle.Short);
+
+        modal.addComponents(new ActionRowBuilder().addComponents(input));
+
+        return interaction.showModal(modal);
+      }
+
+      // VIP (via panel)
       if (interaction.customId === "vip_date") {
 
         db.run("INSERT OR IGNORE INTO vip VALUES (?, ?)", [guildId, interaction.user.id]);
@@ -142,23 +163,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           .setTitle("🎂 Date JJ/MM/AAAA");
 
         const input = new TextInputBuilder()
-          .setCustomId("date_input")
-          .setLabel("Ex: 15/08/1998")
-          .setStyle(TextInputStyle.Short);
-
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
-
-        return interaction.showModal(modal);
-      }
-
-      if (interaction.customId === "date") {
-
-        const modal = new ModalBuilder()
-          .setCustomId("date_modal")
-          .setTitle("🎂 Date JJ/MM/AAAA");
-
-        const input = new TextInputBuilder()
-          .setCustomId("date_input")
+          .setCustomId("input")
           .setLabel("Ex: 15/08/1998")
           .setStyle(TextInputStyle.Short);
 
@@ -176,6 +181,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         return interaction.reply({
           content: "⚙️ Gestion",
+          ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
               new ButtonBuilder().setCustomId("list").setLabel("📺 Liste").setStyle(ButtonStyle.Primary),
@@ -187,8 +193,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               new ButtonBuilder().setCustomId("role").setLabel("🎭 Rôle").setStyle(ButtonStyle.Secondary),
               new ButtonBuilder().setCustomId("close").setLabel("❌").setStyle(ButtonStyle.Danger)
             )
-          ],
-          ephemeral: true
+          ]
         });
       }
 
@@ -230,7 +235,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
         });
       }
 
-      // MODALS
+      // MODALS TRIGGER
       const modalMap = {
         title: "Titre",
         msg: "Message",
@@ -241,6 +246,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       };
 
       if (modalMap[interaction.customId]) {
+
         const modal = new ModalBuilder()
           .setCustomId(interaction.customId + "_modal")
           .setTitle(modalMap[interaction.customId]);
@@ -262,6 +268,8 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.isModalSubmit()) {
 
+      await interaction.deferReply({ ephemeral: true });
+
       const value = interaction.fields.getTextInputValue("input");
 
       const map = {
@@ -274,21 +282,30 @@ client.on(Events.InteractionCreate, async (interaction) => {
       };
 
       if (interaction.customId === "date_modal") {
-        db.run("INSERT OR REPLACE INTO anniversaires VALUES (?, ?, ?)", [guildId, interaction.user.id, value]);
-        return interaction.reply({ content: "🎉 Date enregistrée", ephemeral: true });
+
+        db.run(
+          "INSERT OR REPLACE INTO anniversaires VALUES (?, ?, ?)",
+          [guildId, interaction.user.id, value],
+          (err) => {
+            if (err) return interaction.editReply("❌ Erreur DB");
+            interaction.editReply("🎉 Date enregistrée !");
+          }
+        );
+
+        return;
       }
 
       const field = map[interaction.customId];
 
       if (field) {
+
         db.run(
           `INSERT INTO settings (guild, ${field}) VALUES (?, ?) 
            ON CONFLICT(guild) DO UPDATE SET ${field}=?`,
-          [guildId, value, value]
+          [guildId, value, value],
+          () => interaction.editReply("✅ Modifié")
         );
       }
-
-      return interaction.reply({ content: "✅ Modifié", ephemeral: true });
     }
 
   } catch (err) {
@@ -297,7 +314,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
 });
 
 // =======================
-// ANNIV AUTO
+// ANNIV AUTO SAFE
 // =======================
 
 async function checkBirthdays() {
