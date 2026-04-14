@@ -90,6 +90,32 @@ client.once("ready", async () => {
 
 const waiting = new Map();
 
+// ================= SAFE SAVE (IMPORTANT FIX) =================
+
+function saveSetting(guildId, field, value) {
+
+  const allowed = [
+    "role",
+    "anniv_channel",
+    "anniv_message",
+    "vip_message",
+    "vip_button",
+    "list_title",
+    "vip_title",
+    "novip_title",
+    "list_footer"
+  ];
+
+  if (!allowed.includes(field)) return;
+
+  db.run(
+    `INSERT INTO settings (guild, ${field})
+     VALUES (?, ?)
+     ON CONFLICT(guild) DO UPDATE SET ${field}=excluded.${field}`,
+    [guildId, value]
+  );
+}
+
 // ================= UTILS =================
 
 function isThisWeek(dateStr) {
@@ -181,16 +207,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const week = rows.filter(r => isThisWeek(r.date));
 
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err2, cfg) => {
+        const vip = [];
+        const novip = [];
 
-          const vip = [];
-          const novip = [];
+        let done = 0;
 
-          let done = 0;
+        if (!week.length) {
+          return interaction.reply("📭 Aucun anniversaire cette semaine");
+        }
 
-          if (!week.length) {
-            return interaction.reply("📭 Aucun anniversaire cette semaine");
-          }
+        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (e, cfg) => {
 
           week.forEach(r => {
 
@@ -258,7 +284,7 @@ ${cfg?.list_footer || "🎉 Anniversaires"}`;
       }
     }
 
-    // ================= MENU =================
+    // ================= MENU INLINE =================
     if (interaction.isStringSelectMenu()) {
 
       if (interaction.customId !== "admin_menu") return;
@@ -299,15 +325,23 @@ client.on("messageCreate", (msg) => {
 
   waiting.delete(msg.author.id);
 
-  const val = msg.content;
+  let value = msg.content;
 
-  db.run(`INSERT INTO settings (guild, ${wait.field})
-    VALUES (?, ?)
-    ON CONFLICT(guild) DO UPDATE SET ${wait.field}=?`,
-    [wait.guildId, val, val]
-  );
+  if (wait.field === "role") {
+    const role = msg.mentions.roles.first();
+    if (!role) return msg.reply("❌ Mentionne un rôle");
+    value = role.id;
+  }
 
-  msg.reply("✅ Sauvegardé");
+  if (wait.field === "anniv_channel") {
+    const ch = msg.mentions.channels.first();
+    if (!ch) return msg.reply("❌ Mentionne un salon");
+    value = ch.id;
+  }
+
+  saveSetting(wait.guildId, wait.field, value);
+
+  msg.reply("✅ Sauvegardé !");
 });
 
 // ================= AUTO ANNIV =================
