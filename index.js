@@ -14,7 +14,9 @@ const {
   SlashCommandBuilder,
   ModalBuilder,
   TextInputBuilder,
-  TextInputStyle
+  TextInputStyle,
+  EmbedBuilder,
+  StringSelectMenuBuilder
 } = require("discord.js");
 
 const sqlite3 = require("sqlite3").verbose();
@@ -31,14 +33,10 @@ const client = new Client({
 });
 
 // =======================
-// DATABASE (HOSTINGER SAFE)
+// DATABASE
 // =======================
 
 const db = new sqlite3.Database("/tmp/anniv.db");
-
-db.on("error", (err) => {
-  console.error("❌ DB ERROR:", err);
-});
 
 db.serialize(() => {
   db.run(`CREATE TABLE IF NOT EXISTS anniversaires (guild TEXT, user TEXT, date TEXT)`);
@@ -60,7 +58,7 @@ db.serialize(() => {
 
 const commands = [
   new SlashCommandBuilder().setName("db_menu").setDescription("🎂 Menu anniversaire"),
-  new SlashCommandBuilder().setName("db_panel").setDescription("📨 Envoyer panel")
+  new SlashCommandBuilder().setName("db_panel").setDescription("🎛️ Panneau de configuration")
 ];
 
 const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
@@ -70,17 +68,14 @@ const rest = new REST({ version: "10" }).setToken(process.env.DISCORD_TOKEN);
 // =======================
 
 client.once("ready", async () => {
-  console.log(`✅ BOT CONNECTÉ : ${client.user.tag}`);
+  console.log(`✅ CONNECTÉ : ${client.user.tag}`);
 
-  try {
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    );
-    console.log("✅ COMMANDES DÉPLOYÉES");
-  } catch (err) {
-    console.error("❌ DEPLOY COMMANDES:", err);
-  }
+  await rest.put(
+    Routes.applicationCommands(process.env.CLIENT_ID),
+    { body: commands }
+  );
+
+  console.log("✅ COMMANDES OK");
 
   setInterval(checkBirthdays, 60000);
 });
@@ -96,11 +91,14 @@ client.on(Events.InteractionCreate, async (interaction) => {
   try {
 
     // =======================
-    // COMMANDES
+    // SLASH COMMANDS
     // =======================
 
     if (interaction.isChatInputCommand()) {
 
+      // -----------------------
+      // MENU SIMPLE
+      // -----------------------
       if (interaction.commandName === "db_menu") {
 
         return interaction.reply({
@@ -108,42 +106,66 @@ client.on(Events.InteractionCreate, async (interaction) => {
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId("date").setLabel("🎂 Ma date").setStyle(ButtonStyle.Success),
-              new ButtonBuilder().setCustomId("admin").setLabel("⚙️ Gestion").setStyle(ButtonStyle.Secondary)
+              new ButtonBuilder()
+                .setCustomId("date")
+                .setLabel("🎂 Ma date")
+                .setStyle(ButtonStyle.Success),
+
+              new ButtonBuilder()
+                .setCustomId("admin")
+                .setLabel("⚙️ Gestion")
+                .setStyle(ButtonStyle.Secondary)
             )
           ]
         });
       }
 
+      // -----------------------
+      // PANEL CONFIG
+      // -----------------------
       if (interaction.commandName === "db_panel") {
 
         if (!interaction.member.permissions.has(PermissionsBitField.Flags.Administrator)) {
           return interaction.reply({ content: "❌ Admin uniquement", ephemeral: true });
         }
 
-        db.get("SELECT * FROM settings WHERE guild=?", [guildId], (err, config) => {
+        const embed = new EmbedBuilder()
+          .setTitle("🎛️ Panneau de configuration")
+          .setDescription("Choisis une action dans le menu ci-dessous.")
+          .setColor(0x8e44ad);
 
-          if (err) return safeReply(interaction, "❌ DB erreur");
-
-          const text = config?.panel || "🎉 Clique pour t'inscrire";
-          const btn = config?.bouton || "🎂 Participer";
-
-          const row = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("vip").setLabel(btn).setStyle(ButtonStyle.Success)
+        const menu = new StringSelectMenuBuilder()
+          .setCustomId("config_menu")
+          .setPlaceholder("📌 Sélectionne une option")
+          .addOptions(
+            {
+              label: "📺 Liste des anniversaires",
+              value: "list"
+            },
+            {
+              label: "🎭 Définir le rôle",
+              value: "role"
+            },
+            {
+              label: "📝 Message anniversaire",
+              value: "message"
+            },
+            {
+              label: "📨 Envoyer panel utilisateur",
+              value: "send_panel"
+            }
           );
 
-          interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
-
-          interaction.channel.send({
-            content: text,
-            components: [row]
-          });
+        return interaction.reply({
+          embeds: [embed],
+          components: [new ActionRowBuilder().addComponents(menu)],
+          ephemeral: true
         });
       }
     }
 
     // =======================
-    // BOUTONS
+    // BUTTONS
     // =======================
 
     if (interaction.isButton()) {
@@ -156,14 +178,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const modal = new ModalBuilder()
           .setCustomId("date_modal")
-          .setTitle("🎂 Date JJ/MM/AAAA");
+          .setTitle("🎂 Ta date de naissance");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
           .setLabel("Ex: 15/08/1998")
           .setStyle(TextInputStyle.Short);
 
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(input)
+        );
 
         return interaction.showModal(modal);
       }
@@ -175,12 +199,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
         }
 
         return interaction.reply({
-          content: "⚙️ Gestion",
+          content: "⚙️ Gestion rapide",
           ephemeral: true,
           components: [
             new ActionRowBuilder().addComponents(
-              new ButtonBuilder().setCustomId("list").setLabel("📺 Liste"),
-              new ButtonBuilder().setCustomId("role").setLabel("🎭 Rôle")
+              new ButtonBuilder()
+                .setCustomId("list")
+                .setLabel("📺 Liste")
+                .setStyle(ButtonStyle.Primary),
+
+              new ButtonBuilder()
+                .setCustomId("role")
+                .setLabel("🎭 Rôle")
+                .setStyle(ButtonStyle.Secondary)
             )
           ]
         });
@@ -193,7 +224,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
         db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
 
           if (err) return interaction.editReply("❌ DB erreur");
-
           if (!rows.length) return interaction.editReply("📭 Vide");
 
           const list = rows.map(r => `<@${r.user}> → ${r.date}`).join("\n");
@@ -206,16 +236,105 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
         const modal = new ModalBuilder()
           .setCustomId("role_modal")
-          .setTitle("ID du rôle");
+          .setTitle("🎭 ID du rôle");
 
         const input = new TextInputBuilder()
           .setCustomId("input")
-          .setLabel("Colle ID rôle")
+          .setLabel("Colle l'ID du rôle")
           .setStyle(TextInputStyle.Short);
 
-        modal.addComponents(new ActionRowBuilder().addComponents(input));
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(input)
+        );
 
         return interaction.showModal(modal);
+      }
+    }
+
+    // =======================
+    // SELECT MENU
+    // =======================
+
+    if (interaction.isStringSelectMenu()) {
+
+      if (interaction.customId === "config_menu") {
+
+        const value = interaction.values[0];
+
+        // LISTE
+        if (value === "list") {
+
+          db.all("SELECT * FROM anniversaires WHERE guild=?", [guildId], (err, rows) => {
+
+            if (err) return interaction.reply({ content: "❌ DB erreur", ephemeral: true });
+            if (!rows.length) return interaction.reply({ content: "📭 Aucun anniversaire", ephemeral: true });
+
+            const text = rows.map(r => `🎂 <@${r.user}> → **${r.date}**`).join("\n");
+
+            interaction.reply({ content: text, ephemeral: true });
+          });
+        }
+
+        // ROLE
+        if (value === "role") {
+
+          const modal = new ModalBuilder()
+            .setCustomId("role_modal")
+            .setTitle("🎭 Rôle anniversaire");
+
+          const input = new TextInputBuilder()
+            .setCustomId("input")
+            .setLabel("ID du rôle")
+            .setStyle(TextInputStyle.Short);
+
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(input)
+          );
+
+          return interaction.showModal(modal);
+        }
+
+        // MESSAGE
+        if (value === "message") {
+
+          const modal = new ModalBuilder()
+            .setCustomId("message_modal")
+            .setTitle("📝 Message anniversaire");
+
+          const input = new TextInputBuilder()
+            .setCustomId("input")
+            .setLabel("Ex: Bon anniversaire {user} 🎉")
+            .setStyle(TextInputStyle.Paragraph);
+
+          modal.addComponents(
+            new ActionRowBuilder().addComponents(input)
+          );
+
+          return interaction.showModal(modal);
+        }
+
+        // PANEL USER
+        if (value === "send_panel") {
+
+          const embed = new EmbedBuilder()
+            .setTitle("🎂 Inscription anniversaire")
+            .setDescription("Clique pour enregistrer ta date 🎉")
+            .setColor(0xffcc00);
+
+          const row = new ActionRowBuilder().addComponents(
+            new ButtonBuilder()
+              .setCustomId("date")
+              .setLabel("🎂 Ma date")
+              .setStyle(ButtonStyle.Success)
+          );
+
+          await interaction.channel.send({
+            embeds: [embed],
+            components: [row]
+          });
+
+          return interaction.reply({ content: "✅ Panel envoyé", ephemeral: true });
+        }
       }
     }
 
@@ -239,8 +358,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
             interaction.editReply("🎉 Date enregistrée !");
           }
         );
-
-        return;
       }
 
       if (interaction.customId === "role_modal") {
@@ -251,33 +368,16 @@ client.on(Events.InteractionCreate, async (interaction) => {
           [guildId, value, value],
           () => interaction.editReply("✅ Rôle enregistré")
         );
-
-        return;
       }
     }
 
   } catch (err) {
-    console.error("❌ ERREUR:", err);
-    safeReply(interaction, "❌ Erreur interne");
+    console.error(err);
   }
 });
 
 // =======================
-// SAFE REPLY
-// =======================
-
-function safeReply(interaction, msg) {
-  try {
-    if (interaction.deferred || interaction.replied) {
-      interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
-    } else {
-      interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
-    }
-  } catch {}
-}
-
-// =======================
-// ANNIV AUTO
+// ANNIVERSAIRES AUTO
 // =======================
 
 async function checkBirthdays() {
@@ -303,14 +403,11 @@ async function checkBirthdays() {
 
           const [dd, mm] = row.date.split("/");
 
-          const isBirthday = parseInt(dd) === d && parseInt(mm) === m;
-
-          if (isBirthday) {
+          if (parseInt(dd) === d && parseInt(mm) === m) {
             await member.roles.add(role);
           } else {
             await member.roles.remove(role).catch(() => {});
           }
-
         });
 
       } catch {}
