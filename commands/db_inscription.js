@@ -1,55 +1,49 @@
 const {
   ActionRowBuilder,
-  StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
   EmbedBuilder
 } = require("discord.js");
 
-const { getGuild, updateGuild } = require("../database/db");
-
 module.exports = {
   data: {
-    name: "db_inscription"
+    name: "db_inscription",
+    description: "Poster le message VIP (admin)"
   },
 
   async execute(interaction) {
-    const userId = interaction.user.id;
-    const guildId = interaction.guild.id;
 
-    const db = getGuild(guildId);
-
-    if (!db.users[userId]) {
-      db.users[userId] = {
-        birth: null,
-        showAge: true
-      };
+    // 🔒 ADMIN ONLY
+    if (!interaction.member.permissions.has("Administrator")) {
+      return interaction.reply({
+        content: "❌ Réservé aux admins",
+        ephemeral: true
+      });
     }
 
-    const years = [];
-    for (let y = 2026; y >= 1950; y--) years.push({
-      label: y.toString(),
-      value: y.toString()
-    });
+    const embed = new EmbedBuilder()
+      .setTitle("🌟 Deviens VIP du générique !")
+      .setDescription(
+        "Trouve ce message le jour de ton anniversaire 🎂\n\n" +
+        "Clique sur le bouton ci-dessous pour apparaître en VIP !"
+      )
+      .setColor(0x9b59b6);
 
-    const rowYear = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("birth_year")
-        .setPlaceholder("Année")
-        .addOptions(years.slice(0, 25))
-    );
-
-    const rowAge = new ActionRowBuilder().addComponents(
+    const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("toggle_age")
-        .setLabel("Afficher mon âge")
-        .setStyle(ButtonStyle.Primary)
+        .setCustomId("become_vip")
+        .setLabel("⭐ Devenir VIP")
+        .setStyle(ButtonStyle.Success)
     );
 
     await interaction.reply({
-      content: "📅 Choisis ton année de naissance",
-      components: [rowYear, rowAge],
+      content: "✅ Message VIP envoyé !",
       ephemeral: true
+    });
+
+    await interaction.channel.send({
+      embeds: [embed],
+      components: [row]
     });
   }
 };
