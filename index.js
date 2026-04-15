@@ -7,15 +7,25 @@ const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
-// EVENTS
-require("./src/events/ready")(client);
-require("./src/events/interactionCreate")(client);
-require("./src/events/guildCreate")(client);
+(async () => {
 
-// 🔒 LOCK SYSTEM
-require("./src/utils/lock")(client);
+  // 🔒 LOCK AVANT TOUT
+  await require("./src/utils/lock")(client);
 
-// CRON (IMPORTANT MODIF)
-require("./src/cron/birthdayCron")(client);
+  // Si pas master → STOP TOTAL
+  if (!client.isMaster()) {
+    console.log("⛔ Instance arrêtée (non master)");
+    return;
+  }
 
-client.login(process.env.TOKEN);
+  // EVENTS
+  require("./src/events/ready")(client);
+  require("./src/events/interactionCreate")(client);
+  require("./src/events/guildCreate")(client);
+
+  // CRON
+  require("./src/cron/birthdayCron")(client);
+
+  await client.login(process.env.TOKEN);
+
+})();
