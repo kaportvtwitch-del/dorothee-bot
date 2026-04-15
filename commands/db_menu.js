@@ -1,26 +1,51 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
+const {
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require("discord.js");
 
 module.exports = {
   data: {
-    name: "db_menu"
+    name: "db_menu",
+    description: "Menu anniversaire"
   },
 
   async execute(interaction) {
-    const row = new ActionRowBuilder().addComponents(
+
+    const row1 = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
-        .setCustomId("add_birthday")
-        .setLabel("Ajouter / Modifier")
+        .setCustomId("set_date")
+        .setLabel("📅 Ajouter / Modifier ma date")
         .setStyle(ButtonStyle.Primary),
 
       new ButtonBuilder()
-        .setCustomId("delete_birthday")
-        .setLabel("Supprimer")
-        .setStyle(ButtonStyle.Danger)
+        .setCustomId("toggle_age")
+        .setLabel("🎂 Afficher mon âge")
+        .setStyle(ButtonStyle.Secondary)
     );
 
-    return interaction.reply({
-      content: "🎂 Menu Anniversaire",
-      components: [row],
+    const row2 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("delete_date")
+        .setLabel("🗑 Supprimer ma date")
+        .setStyle(ButtonStyle.Danger),
+
+      new ButtonBuilder()
+        .setCustomId("admin_menu")
+        .setLabel("⚙️ Gestion")
+        .setStyle(ButtonStyle.Success)
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId("close_menu")
+        .setLabel("❌ Fermer")
+        .setStyle(ButtonStyle.Secondary)
+    );
+
+    await interaction.reply({
+      content: "🎂 **Menu anniversaire**",
+      components: [row1, row2, row3],
       ephemeral: true
     });
   }
