@@ -1,3 +1,4 @@
+console.log("CLIENT_ID =", process.env.CLIENT_ID);
 const { REST, Routes } = require("discord.js");
 const fs = require("fs");
 const path = require("path");
