@@ -1,20 +1,31 @@
 const { REST, Routes } = require("discord.js");
-const commands = require("./commands-data"); // ou ton loader
+const fs = require("fs");
+const path = require("path");
 
-const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+module.exports = async () => {
 
-(async () => {
+  const commands = [];
+
+  const commandsPath = path.join(__dirname, "commands");
+  const commandFiles = fs.readdirSync(commandsPath);
+
+  for (const file of commandFiles) {
+    const command = require(`./commands/${file}`);
+    commands.push(command.data.toJSON());
+  }
+
+  const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
   try {
     console.log("🔄 Déploiement GLOBAL...");
-    console.log("CLIENT_ID =", process.env.CLIENT_ID);
 
     await rest.put(
-      Routes.applicationCommands("TON_CLIENT_ID_ICI"),
+      Routes.applicationCommands(process.env.CLIENT_ID),
       { body: commands }
     );
 
     console.log("✅ Commandes globales déployées !");
   } catch (err) {
-    console.error(err);
+    console.error("❌ DEPLOY ERROR:", err);
   }
-})();
+};
