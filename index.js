@@ -2,7 +2,7 @@ const { Client, GatewayIntentBits } = require("discord.js");
 
 console.log("🔥 INDEX LANCÉ");
 console.log("🧠 PID:", process.pid);
-
+require("./src/deploy-commands"); // 👈 AJOUT TEMPORAIRE
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
