@@ -1,32 +1,27 @@
-console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
+const fs = require("fs");
+const { Client, Collection, GatewayIntentBits } = require("discord.js");
+const { handleButtons } = require("./services/buttonHandler");
 
-if (global.__BOT_RUNNING__) {
-  console.log("⛔ BOT DÉJÀ LANCÉ -> STOP");
+console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
+console.log("🧠 PROCESS ID:", process.pid);
+
+// ANTI DOUBLE INSTANCE
+if (global.botStarted) {
+  console.log("⚠️ BOT déjà lancé -> STOP");
   process.exit(0);
 }
-global.__BOT_RUNNING__ = true;
-
-const fs = require("fs");
-const path = require("path");
-const {
-  Client,
-  Collection,
-  GatewayIntentBits,
-  Partials
-} = require("discord.js");
+global.botStarted = true;
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildMessages
-  ],
-  partials: [Partials.Channel]
+  ]
 });
 
 client.commands = new Collection();
 
-/* LOAD COMMANDS */
+// LOAD COMMANDS
 const commandFiles = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
 
 for (const file of commandFiles) {
@@ -39,44 +34,33 @@ for (const file of commandFiles) {
   console.log("✅ Commande chargée:", cmd.data.name);
 }
 
-/* INTERACTIONS */
+// INTERACTIONS
 client.on("interactionCreate", async (interaction) => {
   try {
+    // SLASH COMMANDS
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
       if (!cmd) return;
-
-      await cmd.execute(interaction, client);
+      return cmd.execute(interaction, client);
     }
 
-    if (interaction.isButton()) {
-      const handler = require("./services/interactions");
-      await handler.handleButton(interaction, client);
-    }
-
-    if (interaction.isStringSelectMenu()) {
-      const handler = require("./services/interactions");
-      await handler.handleSelect(interaction, client);
-    }
-
-    if (interaction.isModalSubmit()) {
-      const handler = require("./services/interactions");
-      await handler.handleModal(interaction, client);
+    // BUTTONS + SELECT MENU
+    if (interaction.isButton() || interaction.isStringSelectMenu()) {
+      return handleButtons(interaction, client);
     }
 
   } catch (err) {
-    console.error("💥 INTERACTION ERROR:", err);
+    console.log("💥 INTERACTION ERROR:", err);
     if (!interaction.replied) {
-      interaction.reply({
-        content: "❌ Erreur interaction",
+      await interaction.reply({
+        content: "❌ Une erreur est survenue",
         ephemeral: true
-      });
+      }).catch(() => {});
     }
   }
 });
 
-/* LOGIN */
-client.once("ready", () => {
+client.once("clientReady", () => {
   console.log("🚀 BOT CONNECTÉ :", client.user.tag);
   console.log("🎂 Birthday system ON");
 });
