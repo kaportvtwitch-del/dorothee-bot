@@ -1,3 +1,5 @@
+console.log("🔥 INDEX LANCÉ");
+console.log("🧠 PID:", process.pid);
 const { Client, GatewayIntentBits } = require("discord.js");
 
 const client = new Client({
