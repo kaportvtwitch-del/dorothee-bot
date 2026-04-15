@@ -10,12 +10,12 @@ module.exports = {
     const row = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId('open_birthday_modal')
-        .setLabel('🎂 S’inscrire pour son anniversaire')
+        .setLabel('🎂 Participer')
         .setStyle(ButtonStyle.Primary)
     );
 
     await interaction.reply({
-      content: "🎉 **Chasse au trésor VIP !**\n\nTrouve ce message et clique pour participer 👇",
+      content: "🎉 Clique pour t’inscrire !",
       components: [row]
     });
   }

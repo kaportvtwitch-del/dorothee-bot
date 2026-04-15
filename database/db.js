@@ -3,29 +3,18 @@ const path = require('path');
 
 const filePath = path.join(__dirname, 'database.json');
 
-// Charger la DB
 function load() {
-  try {
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify({}));
-      return {};
-    }
-
-    const data = fs.readFileSync(filePath);
-    return JSON.parse(data || "{}");
-
-  } catch (err) {
-    console.error("❌ DB LOAD ERROR:", err);
+  if (!fs.existsSync(filePath)) {
+    fs.writeFileSync(filePath, JSON.stringify({}));
     return {};
   }
+  return JSON.parse(fs.readFileSync(filePath));
 }
 
-// Sauvegarder
 function save(data) {
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-// Init serveur
 function initGuild(guildId) {
   const data = load();
 
@@ -33,8 +22,9 @@ function initGuild(guildId) {
     data[guildId] = {
       users: {},
       config: {
-        title: "🎂 Anniversaires",
-        vipRole: null
+        birthdayRole: null,
+        birthdayChannel: null,
+        birthdayMessage: "🎉 Joyeux anniversaire {user} !"
       }
     };
     save(data);
@@ -43,23 +33,20 @@ function initGuild(guildId) {
   return data;
 }
 
-// Sauvegarde utilisateur
 function saveUser(guildId, userId, payload) {
   const data = initGuild(guildId);
-
   data[guildId].users[userId] = payload;
-
   save(data);
 }
 
-// Récupérer utilisateurs
 function getUsers(guildId) {
-  const data = initGuild(guildId);
-  return data[guildId].users;
+  return initGuild(guildId)[guildId].users;
 }
 
-module.exports = {
-  initGuild,
-  saveUser,
-  getUsers
-};
+function setConfig(guildId, key, value) {
+  const data = initGuild(guildId);
+  data[guildId].config[key] = value;
+  save(data);
+}
+
+module.exports = { initGuild, saveUser, getUsers, setConfig };
