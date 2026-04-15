@@ -1,60 +1,28 @@
 const { SlashCommandBuilder } = require('discord.js');
-const db = require('../database/db');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('db_liste')
-    .setDescription('Afficher les anniversaires de la semaine'),
+    .setDescription('Voir les anniversaires'),
 
-  async execute(interaction) {
-    await interaction.deferReply();
+  async execute(interaction, db) {
 
-    const guildId = interaction.guild.id;
+    const users = db.getUsers(interaction.guildId);
 
-    const data = db.getGuild(guildId); // ✅ FIX ICI
-
-    if (!data.users || Object.keys(data.users).length === 0) {
-      return interaction.editReply("❌ Aucun anniversaire enregistré");
+    if (!users || Object.keys(users).length === 0) {
+      return interaction.reply({
+        content: "📭 Aucun anniversaire enregistré",
+        flags: 64
+      });
     }
 
-    const now = new Date();
-    const week = [];
+    let msg = "🎂 Liste des anniversaires :\n\n";
 
-    for (const userId in data.users) {
-      const u = data.users[userId];
-
-      if (!u.day || !u.month) continue;
-
-      const birthday = new Date(now.getFullYear(), u.month - 1, u.day);
-
-      const diff = (birthday - now) / (1000 * 60 * 60 * 24);
-
-      if (diff >= 0 && diff <= 7) {
-        week.push({ userId, ...u });
-      }
+    for (const id in users) {
+      const u = users[id];
+      msg += `<@${id}> → ${u.day}/${u.month}/${u.year}\n`;
     }
 
-    if (week.length === 0) {
-      return interaction.editReply("❌ Aucun anniversaire cette semaine");
-    }
-
-    const vip = week.filter(u => u.vip);
-    const normal = week.filter(u => !u.vip);
-
-    let msg = `**${data.config.title}**\n\n`;
-
-    msg += `**${data.config.vipTitle}**\n`;
-    vip.forEach(u => {
-      msg += `<@${u.userId}>${u.showAge && u.year ? ` (${new Date().getFullYear() - u.year} ans)` : ""}\n`;
-    });
-
-    msg += `\n**${data.config.normalTitle}**\n`;
-    normal.forEach(u => {
-      msg += `<@${u.userId}>${u.showAge && u.year ? ` (${new Date().getFullYear() - u.year} ans)` : ""}\n`;
-    });
-
-    msg += `\n${data.config.footer}`;
-
-    interaction.editReply(msg);
+    await interaction.reply({ content: msg });
   }
 };

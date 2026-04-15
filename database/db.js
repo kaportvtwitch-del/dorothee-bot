@@ -3,21 +3,16 @@ const path = require('path');
 
 const filePath = path.join(__dirname, 'database.json');
 
-
-// =======================
-// 🔹 LOAD
-// =======================
+// Charger la DB
 function load() {
   try {
     if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, JSON.stringify({}, null, 2));
+      fs.writeFileSync(filePath, JSON.stringify({}));
+      return {};
     }
 
-    const data = fs.readFileSync(filePath, 'utf-8');
-
-    if (!data || data.trim() === "") return {};
-
-    return JSON.parse(data);
+    const data = fs.readFileSync(filePath);
+    return JSON.parse(data || "{}");
 
   } catch (err) {
     console.error("❌ DB LOAD ERROR:", err);
@@ -25,115 +20,46 @@ function load() {
   }
 }
 
-
-// =======================
-// 🔹 SAVE
-// =======================
+// Sauvegarder
 function save(data) {
-  try {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-  } catch (err) {
-    console.error("❌ DB SAVE ERROR:", err);
-  }
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
 
-
-// =======================
-// 🔹 GET GUILD
-// =======================
-function getGuild(guildId) {
+// Init serveur
+function initGuild(guildId) {
   const data = load();
 
   if (!data[guildId]) {
     data[guildId] = {
       users: {},
       config: {
-        title: "🎂 Anniversaires de la semaine",
-        vipTitle: "🌟 VIP",
-        normalTitle: "🎉 Membres",
-        footer: "Joyeux anniversaire !",
-        roleId: null
+        title: "🎂 Anniversaires",
+        vipRole: null
       }
     };
     save(data);
   }
 
-  return data[guildId];
+  return data;
 }
 
+// Sauvegarde utilisateur
+function saveUser(guildId, userId, payload) {
+  const data = initGuild(guildId);
 
-// =======================
-// 🔹 SAVE USER
-// =======================
-function saveUser(guildId, userId, userData) {
-  const data = load();
-
-  if (!data[guildId]) {
-    data[guildId] = {
-      users: {},
-      config: {}
-    };
-  }
-
-  data[guildId].users[userId] = {
-    ...userData
-  };
+  data[guildId].users[userId] = payload;
 
   save(data);
 }
 
-
-// =======================
-// 🔹 DELETE USER
-// =======================
-function deleteUser(guildId, userId) {
-  const data = load();
-
-  if (data[guildId] && data[guildId].users[userId]) {
-    delete data[guildId].users[userId];
-    save(data);
-  }
-}
-
-
-// =======================
-// 🔹 GET ALL USERS
-// =======================
+// Récupérer utilisateurs
 function getUsers(guildId) {
-  const guild = getGuild(guildId);
-  return guild.users;
+  const data = initGuild(guildId);
+  return data[guildId].users;
 }
 
-
-// =======================
-// 🔹 UPDATE CONFIG
-// =======================
-function updateConfig(guildId, newConfig) {
-  const data = load();
-
-  if (!data[guildId]) {
-    data[guildId] = {
-      users: {},
-      config: {}
-    };
-  }
-
-  data[guildId].config = {
-    ...data[guildId].config,
-    ...newConfig
-  };
-
-  save(data);
-}
-
-
-// =======================
-// 🔹 EXPORTS
-// =======================
 module.exports = {
-  getGuild,
+  initGuild,
   saveUser,
-  deleteUser,
-  getUsers,
-  updateConfig
+  getUsers
 };

@@ -1,9 +1,4 @@
-const {
-  SlashCommandBuilder,
-  ActionRowBuilder,
-  ButtonBuilder,
-  ButtonStyle
-} = require('discord.js');
+const { SlashCommandBuilder } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -11,23 +6,9 @@ module.exports = {
     .setDescription('Menu anniversaire'),
 
   async execute(interaction) {
-
-    const row = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId('open_birthday_modal')
-        .setLabel('Ajouter / Modifier ma date')
-        .setStyle(ButtonStyle.Primary),
-
-      new ButtonBuilder()
-        .setCustomId('delete_date')
-        .setLabel('Supprimer ma date')
-        .setStyle(ButtonStyle.Danger)
-    );
-
     await interaction.reply({
-      content: "🎂 Gestion de ton anniversaire :",
-      components: [row],
-      ephemeral: true
+      content: "🎛️ Utilise /db_inscription pour configurer ton anniversaire",
+      flags: 64
     });
   }
 };
