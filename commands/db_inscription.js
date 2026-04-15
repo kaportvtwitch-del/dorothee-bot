@@ -3,8 +3,10 @@ const {
   StringSelectMenuBuilder,
   ButtonBuilder,
   ButtonStyle,
-  ComponentType
+  EmbedBuilder
 } = require("discord.js");
+
+const { getGuild, updateGuild } = require("../database/db");
 
 module.exports = {
   data: {
@@ -12,70 +14,41 @@ module.exports = {
   },
 
   async execute(interaction) {
+    const userId = interaction.user.id;
+    const guildId = interaction.guild.id;
 
-    const jours = Array.from({ length: 31 }, (_, i) => ({
-      label: `${i + 1}`,
-      value: `${i + 1}`
-    }));
+    const db = getGuild(guildId);
 
-    const mois = [
-      { label: "Janvier", value: "01" },
-      { label: "Février", value: "02" },
-      { label: "Mars", value: "03" },
-      { label: "Avril", value: "04" },
-      { label: "Mai", value: "05" },
-      { label: "Juin", value: "06" },
-      { label: "Juillet", value: "07" },
-      { label: "Août", value: "08" },
-      { label: "Septembre", value: "09" },
-      { label: "Octobre", value: "10" },
-      { label: "Novembre", value: "11" },
-      { label: "Décembre", value: "12" }
-    ];
+    if (!db.users[userId]) {
+      db.users[userId] = {
+        birth: null,
+        showAge: true
+      };
+    }
 
-    const annees = Array.from({ length: 60 }, (_, i) => {
-      const year = new Date().getFullYear() - i;
-      return { label: `${year}`, value: `${year}` };
+    const years = [];
+    for (let y = 2026; y >= 1950; y--) years.push({
+      label: y.toString(),
+      value: y.toString()
     });
 
-    const rowJour = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("birth_day")
-        .setPlaceholder("Jour")
-        .addOptions(jours)
-    );
-
-    const rowMois = new ActionRowBuilder().addComponents(
-      new StringSelectMenuBuilder()
-        .setCustomId("birth_month")
-        .setPlaceholder("Mois")
-        .addOptions(mois)
-    );
-
-    const rowAnnee = new ActionRowBuilder().addComponents(
+    const rowYear = new ActionRowBuilder().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId("birth_year")
         .setPlaceholder("Année")
-        .addOptions(annees)
+        .addOptions(years.slice(0, 25))
     );
 
     const rowAge = new ActionRowBuilder().addComponents(
       new ButtonBuilder()
         .setCustomId("toggle_age")
-        .setLabel("Afficher mon âge : ON/OFF")
-        .setStyle(ButtonStyle.Secondary)
+        .setLabel("Afficher mon âge")
+        .setStyle(ButtonStyle.Primary)
     );
 
-    const rowSave = new ActionRowBuilder().addComponents(
-      new ButtonBuilder()
-        .setCustomId("save_birth")
-        .setLabel("Enregistrer")
-        .setStyle(ButtonStyle.Success)
-    );
-
-    return interaction.reply({
-      content: "📅 Choisis ta date d'anniversaire :",
-      components: [rowJour, rowMois, rowAnnee, rowAge, rowSave],
+    await interaction.reply({
+      content: "📅 Choisis ton année de naissance",
+      components: [rowYear, rowAge],
       ephemeral: true
     });
   }
