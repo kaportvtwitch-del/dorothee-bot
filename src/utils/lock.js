@@ -5,48 +5,59 @@ const instanceId = process.pid;
 
 module.exports = async (client) => {
 
-  const now = Date.now();
+  console.log("🔒 Tentative lock PID:", instanceId);
 
-  const [[row]] = await db.query("SELECT * FROM bot_lock WHERE id=1");
+  try {
 
-  // Si lock libre ou expiré (30 sec)
-  if (!row.locked_by || (now - row.last_heartbeat > 30000)) {
+    const now = Date.now();
 
-    await db.query(
-      "UPDATE bot_lock SET locked_by=?, last_heartbeat=? WHERE id=1",
-      [instanceId, now]
-    );
+    const [[row]] = await db.query("SELECT * FROM bot_lock WHERE id=1");
 
-    isMaster = true;
-    console.log("🟢 MASTER DIRECT:", instanceId);
+    console.log("📊 LOCK DB:", row);
 
-  } else if (row.locked_by == instanceId) {
+    if (!row.locked_by || (now - row.last_heartbeat > 30000)) {
 
-    isMaster = true;
+      await db.query(
+        "UPDATE bot_lock SET locked_by=?, last_heartbeat=? WHERE id=1",
+        [instanceId, now]
+      );
 
-  } else {
+      isMaster = true;
+      console.log("🟢 MASTER PRIS:", instanceId);
 
-    console.log("🔴 INSTANCE NON MASTER - STOP LOGIQUE:", instanceId);
+    } else if (row.locked_by == instanceId) {
 
-    isMaster = false;
+      isMaster = true;
+      console.log("🟡 MASTER EXISTANT:", instanceId);
 
-    // 👉 IMPORTANT : empêcher cette instance de faire quoi que ce soit
+    } else {
+
+      console.log("🔴 NON MASTER:", instanceId, "lock détenu par", row.locked_by);
+
+      isMaster = false;
+
+      client.isMaster = () => false;
+      return;
+    }
+
+    // heartbeat
+    setInterval(async () => {
+
+      if (!isMaster) return;
+
+      await db.query(
+        "UPDATE bot_lock SET last_heartbeat=? WHERE id=1",
+        [Date.now()]
+      );
+
+      console.log("💓 HEARTBEAT:", instanceId);
+
+    }, 10000);
+
+    client.isMaster = () => isMaster;
+
+  } catch (err) {
+    console.error("❌ ERREUR LOCK:", err);
     client.isMaster = () => false;
-
-    return; // stop ici
   }
-
-  // heartbeat uniquement si master
-  setInterval(async () => {
-
-    if (!isMaster) return;
-
-    await db.query(
-      "UPDATE bot_lock SET last_heartbeat=? WHERE id=1",
-      [Date.now()]
-    );
-
-  }, 10000);
-
-  client.isMaster = () => isMaster;
 };
