@@ -1,62 +1,139 @@
-const fs = require("fs");
-const path = require("path");
+const fs = require('fs');
+const path = require('path');
 
-const DB_PATH = path.join(__dirname, "data.json");
+const filePath = path.join(__dirname, 'database.json');
 
-function loadDB() {
+
+// =======================
+// 🔹 LOAD
+// =======================
+function load() {
   try {
-    if (!fs.existsSync(DB_PATH)) {
-      fs.writeFileSync(DB_PATH, JSON.stringify({ guilds: {} }, null, 2));
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify({}, null, 2));
     }
 
-    const raw = fs.readFileSync(DB_PATH, "utf8");
+    const data = fs.readFileSync(filePath, 'utf-8');
 
-    if (!raw || raw.trim() === "") {
-      return { guilds: {} };
-    }
+    if (!data || data.trim() === "") return {};
 
-    return JSON.parse(raw);
+    return JSON.parse(data);
+
   } catch (err) {
-    console.log("❌ DB LOAD ERROR:", err);
-    return { guilds: {} };
+    console.error("❌ DB LOAD ERROR:", err);
+    return {};
   }
 }
 
-function saveDB(db) {
-  fs.writeFileSync(DB_PATH, JSON.stringify(db, null, 2));
+
+// =======================
+// 🔹 SAVE
+// =======================
+function save(data) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+  } catch (err) {
+    console.error("❌ DB SAVE ERROR:", err);
+  }
 }
 
-function getGuild(guildId) {
-  const db = loadDB();
 
-  if (!db.guilds[guildId]) {
-    db.guilds[guildId] = {
+// =======================
+// 🔹 GET GUILD
+// =======================
+function getGuild(guildId) {
+  const data = load();
+
+  if (!data[guildId]) {
+    data[guildId] = {
       users: {},
       config: {
-        title: "🎂 Anniversaires",
-        vipTitle: "⭐ VIP",
-        normalTitle: "👤 Membres",
-        footer: "Bon anniversaire à tous !",
-        ageEnabled: true,
-        roleId: null,
-        channelId: null
+        title: "🎂 Anniversaires de la semaine",
+        vipTitle: "🌟 VIP",
+        normalTitle: "🎉 Membres",
+        footer: "Joyeux anniversaire !",
+        roleId: null
       }
     };
-    saveDB(db);
+    save(data);
   }
 
-  return db.guilds[guildId];
+  return data[guildId];
 }
 
-function updateGuild(guildId, data) {
-  const db = loadDB();
-  db.guilds[guildId] = data;
-  saveDB(db);
+
+// =======================
+// 🔹 SAVE USER
+// =======================
+function saveUser(guildId, userId, userData) {
+  const data = load();
+
+  if (!data[guildId]) {
+    data[guildId] = {
+      users: {},
+      config: {}
+    };
+  }
+
+  data[guildId].users[userId] = {
+    ...userData
+  };
+
+  save(data);
 }
 
+
+// =======================
+// 🔹 DELETE USER
+// =======================
+function deleteUser(guildId, userId) {
+  const data = load();
+
+  if (data[guildId] && data[guildId].users[userId]) {
+    delete data[guildId].users[userId];
+    save(data);
+  }
+}
+
+
+// =======================
+// 🔹 GET ALL USERS
+// =======================
+function getUsers(guildId) {
+  const guild = getGuild(guildId);
+  return guild.users;
+}
+
+
+// =======================
+// 🔹 UPDATE CONFIG
+// =======================
+function updateConfig(guildId, newConfig) {
+  const data = load();
+
+  if (!data[guildId]) {
+    data[guildId] = {
+      users: {},
+      config: {}
+    };
+  }
+
+  data[guildId].config = {
+    ...data[guildId].config,
+    ...newConfig
+  };
+
+  save(data);
+}
+
+
+// =======================
+// 🔹 EXPORTS
+// =======================
 module.exports = {
-  loadDB,
-  saveDB,
   getGuild,
-  updateGuild
+  saveUser,
+  deleteUser,
+  getUsers,
+  updateConfig
 };
