@@ -1,4 +1,3 @@
-// src/interactions/buttons/adminMenu.js
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
 module.exports = async (interaction) => {
@@ -20,14 +19,18 @@ module.exports = async (interaction) => {
   );
 
   const row3 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("set_channel").setLabel("Salon").setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId("set_role").setLabel("Rôle Anniv").setStyle(ButtonStyle.Success),
-    new ButtonBuilder().setCustomId("set_vip_role").setLabel("Rôle VIP").setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId("set_channel").setLabel("Salon Anniv").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("send_vip_msg").setLabel("Envoyer Msg VIP").setStyle(ButtonStyle.Success),
+    new ButtonBuilder().setCustomId("set_role").setLabel("Rôle Anniv").setStyle(ButtonStyle.Success)
+  );
+
+  const row4 = new ActionRowBuilder().addComponents(
+    new ButtonBuilder().setCustomId("edit_vip_button").setLabel("Texte bouton VIP").setStyle(ButtonStyle.Secondary)
   );
 
   await interaction.reply({
     content: "⚙️ Menu Admin",
-    components: [row1, row2, row3],
+    components: [row1, row2, row3, row4],
     ephemeral: true
   });
 };

@@ -1,4 +1,3 @@
-// src/interactions/buttons/vipButton.js
 const db = require("../../database/db");
 
 module.exports = async (interaction) => {
@@ -8,8 +7,8 @@ module.exports = async (interaction) => {
     [interaction.user.id, interaction.guild.id]
   );
 
-  interaction.reply({
-    content: "🌟 VIP activé",
+  return interaction.reply({
+    content: "🌟 Tu es marqué comme VIP pour cette semaine !",
     ephemeral: true
   });
 };

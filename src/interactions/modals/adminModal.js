@@ -1,4 +1,3 @@
-// src/interactions/modals/adminModal.js
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js");
 
 module.exports = (customId, label) => {

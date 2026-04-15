@@ -1,4 +1,3 @@
-// src/commands/dbmenu.js
 const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
 
 module.exports = {

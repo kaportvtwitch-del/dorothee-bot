@@ -1,4 +1,3 @@
-// src/services/guildService.js
 const db = require("../database/db");
 
 exports.getGuild = async (guildId) => {
