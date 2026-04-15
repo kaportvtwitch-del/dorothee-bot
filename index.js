@@ -2,67 +2,47 @@ const fs = require("fs");
 const { Client, Collection, GatewayIntentBits } = require("discord.js");
 const { handleButtons } = require("./services/buttonHandler");
 
-console.log("🔥 INDEX LANCÉ (ENTRY POINT)");
-console.log("🧠 PROCESS ID:", process.pid);
-
-// ANTI DOUBLE INSTANCE
-if (global.botStarted) {
-  console.log("⚠️ BOT déjà lancé -> STOP");
-  process.exit(0);
-}
-global.botStarted = true;
+console.log("🔥 INDEX LANCÉ");
+console.log("PID:", process.pid);
 
 const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages
-  ]
+  intents: [GatewayIntentBits.Guilds]
 });
 
 client.commands = new Collection();
 
 // LOAD COMMANDS
-const commandFiles = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
+const files = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
 
-for (const file of commandFiles) {
+for (const file of files) {
   const cmd = require(`./commands/${file}`);
-  if (!cmd.data || !cmd.execute) {
-    console.log("⚠️ Commande ignorée:", file);
-    continue;
+  if (cmd.data && cmd.execute) {
+    client.commands.set(cmd.data.name, cmd);
+    console.log("✅ Commande chargée:", cmd.data.name);
   }
-  client.commands.set(cmd.data.name, cmd);
-  console.log("✅ Commande chargée:", cmd.data.name);
 }
 
 // INTERACTIONS
 client.on("interactionCreate", async (interaction) => {
+
   try {
-    // SLASH COMMANDS
+
     if (interaction.isChatInputCommand()) {
       const cmd = client.commands.get(interaction.commandName);
-      if (!cmd) return;
-      return cmd.execute(interaction, client);
+      if (cmd) await cmd.execute(interaction);
     }
 
-    // BUTTONS + SELECT MENU
-    if (interaction.isButton() || interaction.isStringSelectMenu()) {
-      return handleButtons(interaction, client);
+    if (interaction.isButton()) {
+      await handleButtons(interaction);
     }
 
   } catch (err) {
-    console.log("💥 INTERACTION ERROR:", err);
-    if (!interaction.replied) {
-      await interaction.reply({
-        content: "❌ Une erreur est survenue",
-        ephemeral: true
-      }).catch(() => {});
-    }
+    console.log("💥 ERROR:", err);
   }
 });
 
 client.once("clientReady", () => {
-  console.log("🚀 BOT CONNECTÉ :", client.user.tag);
-  console.log("🎂 Birthday system ON");
+  console.log("🚀 CONNECTÉ :", client.user.tag);
 });
 
 client.login(process.env.TOKEN);
