@@ -1,10 +1,22 @@
-const fs = require("fs");
-const { Client, Collection, GatewayIntentBits } = require("discord.js");
-const { handleButtons } = require("./services/buttonHandler");
-const { getGuild, updateGuild } = require("./database/db");
+require('dotenv').config();
 
 console.log("🔥 INDEX LANCÉ");
 console.log("🧠 PID:", process.pid);
+
+const fs = require('fs');
+const path = require('path');
+
+const {
+  Client,
+  GatewayIntentBits,
+  Collection,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  ActionRowBuilder
+} = require('discord.js');
+
+const db = require('./database/db');
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds]
@@ -13,124 +25,175 @@ const client = new Client({
 client.commands = new Collection();
 
 
-// ========================
-// 📦 LOAD COMMANDS
-// ========================
-const commandFiles = fs.readdirSync("./commands").filter(f => f.endsWith(".js"));
+// =======================
+// 🔹 LOAD COMMANDS
+// =======================
+const commandsPath = path.join(__dirname, 'commands');
+const commandFiles = fs.readdirSync(commandsPath).filter(file => file.endsWith('.js'));
 
 for (const file of commandFiles) {
   try {
-    const cmd = require(`./commands/${file}`);
+    const command = require(`./commands/${file}`);
 
-    if (!cmd.data || !cmd.execute) {
-      console.log("⚠️ Commande ignorée:", file);
+    if (!command.data || !command.execute) {
+      console.log(`⚠️ Commande ignorée: ${file}`);
       continue;
     }
 
-    client.commands.set(cmd.data.name, cmd);
-    console.log("✅ Commande chargée:", cmd.data.name);
+    client.commands.set(command.data.name, command);
+    console.log(`✅ Commande chargée: ${command.data.name}`);
 
   } catch (err) {
-    console.log("❌ ERREUR LOAD:", file, err);
+    console.log(`❌ ERREUR LOAD CMD ${file}:`, err);
   }
 }
 
 
-// ========================
-// 🎮 INTERACTIONS
-// ========================
-client.on("interactionCreate", async (interaction) => {
-
-  try {
-
-    // ========================
-    // 💬 COMMANDES SLASH
-    // ========================
-    if (interaction.isChatInputCommand()) {
-
-      const cmd = client.commands.get(interaction.commandName);
-      if (!cmd) return;
-
-      return await cmd.execute(interaction, client);
-    }
-
-
-    // ========================
-    // 🔘 BOUTONS
-    // ========================
-    if (interaction.isButton()) {
-      return await handleButtons(interaction, client);
-    }
-
-
-    // ========================
-    // 📅 SELECT MENU (CALENDRIER)
-    // ========================
-    if (interaction.isStringSelectMenu()) {
-
-      const guildId = interaction.guild.id;
-      const userId = interaction.user.id;
-
-      const db = getGuild(guildId);
-
-      if (!db.users[userId]) {
-        db.users[userId] = {};
-      }
-
-      const user = db.users[userId];
-
-      // STOCKAGE TEMPORAIRE
-      if (interaction.customId === "select_day") {
-        user.day = interaction.values[0];
-      }
-
-      if (interaction.customId === "select_month") {
-        user.month = interaction.values[0];
-      }
-
-      if (interaction.customId === "select_year") {
-        user.year = interaction.values[0];
-      }
-
-      // SI DATE COMPLÈTE
-      if (user.day && user.month && user.year) {
-        user.birth = `${user.year}-${user.month}-${user.day}`;
-      }
-
-      updateGuild(guildId, db);
-
-      return interaction.reply({
-        content: "✅ Date enregistrée !",
-        ephemeral: true
-      });
-    }
-
-  } catch (err) {
-
-    console.log("💥 INTERACTION ERROR:", err);
-
-    try {
-      if (!interaction.replied && !interaction.deferred) {
-        await interaction.reply({
-          content: "❌ Une erreur est survenue",
-          ephemeral: true
-        });
-      }
-    } catch {}
-  }
-});
-
-
-// ========================
-// 🚀 READY
-// ========================
-client.once("clientReady", () => {
-  console.log("🚀 BOT CONNECTÉ :", client.user.tag);
+// =======================
+// 🔹 READY
+// =======================
+client.once('ready', () => {
+  console.log(`🚀 BOT CONNECTÉ : ${client.user.tag}`);
   console.log("🎂 Système anniversaire actif");
 });
 
 
-// ========================
-// 🔐 LOGIN
-// ========================
+// =======================
+// 🔹 INTERACTIONS
+// =======================
+client.on('interactionCreate', async interaction => {
+
+  try {
+
+    // =======================
+    // 🔸 COMMANDES
+    // =======================
+    if (interaction.isChatInputCommand()) {
+
+      const command = client.commands.get(interaction.commandName);
+      if (!command) return;
+
+      await command.execute(interaction);
+    }
+
+
+    // =======================
+    // 🔸 BOUTONS
+    // =======================
+    if (interaction.isButton()) {
+
+      // 🎂 OUVRIR FORMULAIRE
+      if (interaction.customId === 'open_birthday_modal') {
+
+        const modal = new ModalBuilder()
+          .setCustomId('birthday_modal')
+          .setTitle('🎂 Ton anniversaire');
+
+        const dayInput = new TextInputBuilder()
+          .setCustomId('day')
+          .setLabel('Jour (1-31)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const monthInput = new TextInputBuilder()
+          .setCustomId('month')
+          .setLabel('Mois (1-12)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const yearInput = new TextInputBuilder()
+          .setCustomId('year')
+          .setLabel('Année (1950-2025)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        const ageInput = new TextInputBuilder()
+          .setCustomId('showAge')
+          .setLabel('Afficher ton âge ? (oui/non)')
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true);
+
+        modal.addComponents(
+          new ActionRowBuilder().addComponents(dayInput),
+          new ActionRowBuilder().addComponents(monthInput),
+          new ActionRowBuilder().addComponents(yearInput),
+          new ActionRowBuilder().addComponents(ageInput)
+        );
+
+        return interaction.showModal(modal);
+      }
+
+
+      // 🗑️ SUPPRIMER DATE
+      if (interaction.customId === 'delete_date') {
+
+        db.deleteUser(interaction.guild.id, interaction.user.id);
+
+        return interaction.reply({
+          content: "🗑️ Date supprimée !",
+          ephemeral: true
+        });
+      }
+    }
+
+
+    // =======================
+    // 🔸 MODAL SUBMIT
+    // =======================
+    if (interaction.isModalSubmit()) {
+
+      if (interaction.customId === 'birthday_modal') {
+
+        const day = parseInt(interaction.fields.getTextInputValue('day'));
+        const month = parseInt(interaction.fields.getTextInputValue('month'));
+        const year = parseInt(interaction.fields.getTextInputValue('year'));
+        const showAgeInput = interaction.fields.getTextInputValue('showAge');
+
+        const showAge = showAgeInput.toLowerCase() === 'oui';
+
+        // ✅ VALIDATION
+        if (
+          isNaN(day) || isNaN(month) || isNaN(year) ||
+          day < 1 || day > 31 ||
+          month < 1 || month > 12 ||
+          year < 1950 || year > new Date().getFullYear()
+        ) {
+          return interaction.reply({
+            content: "❌ Date invalide",
+            ephemeral: true
+          });
+        }
+
+        db.saveUser(interaction.guild.id, interaction.user.id, {
+          day,
+          month,
+          year,
+          showAge,
+          vip: false
+        });
+
+        return interaction.reply({
+          content: "✅ Anniversaire enregistré !",
+          ephemeral: true
+        });
+      }
+    }
+
+  } catch (err) {
+    console.error("💥 INTERACTION ERROR:", err);
+
+    if (!interaction.replied && !interaction.deferred) {
+      interaction.reply({
+        content: "❌ Une erreur est survenue",
+        ephemeral: true
+      });
+    }
+  }
+
+});
+
+
+// =======================
+// 🔹 LOGIN
+// =======================
 client.login(process.env.TOKEN);
