@@ -17,7 +17,7 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
     console.log("🔄 Déploiement GLOBAL...");
 
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID), // ✅ GLOBAL
+      Routes.applicationGuildCommands(process.env.CLIENT_ID, 1270838316152918189), // ✅ GLOBAL
       { body: commands }
     );
 

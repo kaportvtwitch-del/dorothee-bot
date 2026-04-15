@@ -2,21 +2,23 @@ const { Client, GatewayIntentBits } = require("discord.js");
 
 console.log("🔥 INDEX LANCÉ");
 console.log("🧠 PID:", process.pid);
-require("./src/deploy-commands"); // 👈 AJOUT TEMPORAIRE
+
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
 });
 
 (async () => {
 
-  // 🔒 LOCK AVANT TOUT
+  // 🔒 LOCK
   await require("./src/utils/lock")(client);
 
-  // Si pas master → STOP TOTAL
   if (!client.isMaster()) {
     console.log("⛔ Instance arrêtée (non master)");
     return;
   }
+
+  // ✅ DEPLOY UNIQUEMENT MASTER
+  await require("./src/deploy-commands");
 
   // EVENTS
   require("./src/events/ready")(client);
