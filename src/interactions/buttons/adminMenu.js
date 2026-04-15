@@ -25,7 +25,8 @@ module.exports = async (interaction) => {
   );
 
   const row4 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("edit_vip_button").setLabel("Texte bouton VIP").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("edit_vip_button").setLabel("Texte bouton VIP").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("send_week_list").setLabel("Envoyer Liste Semaine").setStyle(ButtonStyle.Primary)
   );
 
   await interaction.reply({

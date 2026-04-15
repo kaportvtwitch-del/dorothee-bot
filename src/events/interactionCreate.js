@@ -6,6 +6,8 @@ const vipButton = require("../interactions/buttons/vipButton");
 const adminMenu = require("../interactions/buttons/adminMenu");
 
 const guildService = require("../services/guildService");
+const weekList = require("../utils/weekList");
+
 const db = require("../database/db");
 
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js");
@@ -35,7 +37,7 @@ module.exports = (client) => {
         return adminMenu(interaction);
       }
 
-      // ENVOYER MESSAGE VIP
+      // MESSAGE VIP
       if (interaction.customId === "send_vip_msg") {
 
         const config = await guildService.getGuild(interaction.guild.id);
@@ -58,7 +60,51 @@ module.exports = (client) => {
         });
       }
 
-      // EDIT TEXTES
+      // LISTE SEMAINE
+      if (interaction.customId === "send_week_list") {
+
+        const config = await guildService.getGuild(interaction.guild.id);
+        const list = await weekList(interaction.guild.id);
+
+        let vip = [];
+        let nonvip = [];
+
+        for (const u of list) {
+          let age = "";
+
+          if (u.show_age && u.year) {
+            age = ` - ${new Date().getFullYear() - u.year} ans`;
+          }
+
+          const line = `<@${u.user_id}>${age}`;
+
+          if (u.is_vip) vip.push(line);
+          else nonvip.push(line);
+        }
+
+        let message = "";
+
+        message += `**${config?.title || "🎂 Anniversaires"}**\n\n`;
+
+        message += `__${config?.vip_subtitle || "VIP"}__\n`;
+        message += vip.length ? vip.join("\n") : "Aucun\n";
+
+        message += `\n\n__${config?.nonvip_subtitle || "Membres"}__\n`;
+        message += nonvip.length ? nonvip.join("\n") : "Aucun\n";
+
+        if (config?.footer) {
+          message += `\n\n${config.footer}`;
+        }
+
+        await interaction.channel.send(message);
+
+        return interaction.reply({
+          content: "✅ Liste envoyée",
+          ephemeral: true
+        });
+      }
+
+      // EDIT TEXT
       const map = {
         edit_title: "title",
         edit_vip: "vip_subtitle",
@@ -77,23 +123,15 @@ module.exports = (client) => {
 
       // SET CHANNEL
       if (interaction.customId === "set_channel") {
-        await guildService.updateField(
-          interaction.guild.id,
-          "channel_id",
-          interaction.channel.id
-        );
+        await guildService.updateField(interaction.guild.id, "channel_id", interaction.channel.id);
         return interaction.reply({ content: "✅ Salon défini", ephemeral: true });
       }
 
       // SET ROLE
       if (interaction.customId === "set_role") {
         const role = interaction.member.roles.highest;
-        await guildService.updateField(
-          interaction.guild.id,
-          "role_id",
-          role.id
-        );
-        return interaction.reply({ content: "✅ Rôle anniversaire défini", ephemeral: true });
+        await guildService.updateField(interaction.guild.id, "role_id", role.id);
+        return interaction.reply({ content: "✅ Rôle défini", ephemeral: true });
       }
 
     }
@@ -101,7 +139,6 @@ module.exports = (client) => {
     // MODALS
     if (interaction.isModalSubmit()) {
 
-      // ANNIVERSAIRE
       if (interaction.customId === "birthdayModal") {
 
         const day = interaction.fields.getTextInputValue("day");
@@ -124,7 +161,6 @@ module.exports = (client) => {
         return interaction.reply({ content: "✅ Enregistré", ephemeral: true });
       }
 
-      // ADMIN SAVE
       const map = {
         edit_title: "title",
         edit_vip: "vip_subtitle",
