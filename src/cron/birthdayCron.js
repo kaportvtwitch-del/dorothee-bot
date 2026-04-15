@@ -1,9 +1,16 @@
-// src/cron/birthdayCron.js
 const cron = require("node-cron");
 const db = require("../database/db");
 
 module.exports = (client) => {
+
   cron.schedule("0 0 * * *", async () => {
+
+    if (!client.isMaster()) {
+      console.log("⛔ Cron ignoré (pas master)");
+      return;
+    }
+
+    console.log("🎂 Cron exécuté par", process.pid);
 
     const today = new Date();
     const day = today.getDate();

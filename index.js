@@ -1,6 +1,7 @@
+const { Client, GatewayIntentBits } = require("discord.js");
+
 console.log("🔥 INDEX LANCÉ");
 console.log("🧠 PID:", process.pid);
-const { Client, GatewayIntentBits } = require("discord.js");
 
 const client = new Client({
   intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers]
@@ -11,7 +12,10 @@ require("./src/events/ready")(client);
 require("./src/events/interactionCreate")(client);
 require("./src/events/guildCreate")(client);
 
-// CRON
+// 🔒 LOCK SYSTEM
+require("./src/utils/lock")(client);
+
+// CRON (IMPORTANT MODIF)
 require("./src/cron/birthdayCron")(client);
 
 client.login(process.env.TOKEN);
