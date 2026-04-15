@@ -1,25 +1,60 @@
-const db = require("../database/db");
+const { SlashCommandBuilder } = require('discord.js');
+const db = require('../database/db');
 
 module.exports = {
-  data: {
-    name: "db_liste"
-  },
+  data: new SlashCommandBuilder()
+    .setName('db_liste')
+    .setDescription('Afficher les anniversaires de la semaine'),
 
   async execute(interaction) {
-    const data = db.initGuild(interaction.guildId);
+    await interaction.deferReply();
 
-    const users = data.users;
+    const guildId = interaction.guild.id;
 
-    let list = "🎂 ANNIVERSAIRES :\n\n";
+    const data = db.getGuild(guildId); // ✅ FIX ICI
 
-    for (const userId in users) {
-      const u = users[userId];
-      list += `- <@${userId}> (${u.date})\n`;
+    if (!data.users || Object.keys(data.users).length === 0) {
+      return interaction.editReply("❌ Aucun anniversaire enregistré");
     }
 
-    return interaction.reply({
-      content: list,
-      ephemeral: false
+    const now = new Date();
+    const week = [];
+
+    for (const userId in data.users) {
+      const u = data.users[userId];
+
+      if (!u.day || !u.month) continue;
+
+      const birthday = new Date(now.getFullYear(), u.month - 1, u.day);
+
+      const diff = (birthday - now) / (1000 * 60 * 60 * 24);
+
+      if (diff >= 0 && diff <= 7) {
+        week.push({ userId, ...u });
+      }
+    }
+
+    if (week.length === 0) {
+      return interaction.editReply("❌ Aucun anniversaire cette semaine");
+    }
+
+    const vip = week.filter(u => u.vip);
+    const normal = week.filter(u => !u.vip);
+
+    let msg = `**${data.config.title}**\n\n`;
+
+    msg += `**${data.config.vipTitle}**\n`;
+    vip.forEach(u => {
+      msg += `<@${u.userId}>${u.showAge && u.year ? ` (${new Date().getFullYear() - u.year} ans)` : ""}\n`;
     });
+
+    msg += `\n**${data.config.normalTitle}**\n`;
+    normal.forEach(u => {
+      msg += `<@${u.userId}>${u.showAge && u.year ? ` (${new Date().getFullYear() - u.year} ans)` : ""}\n`;
+    });
+
+    msg += `\n${data.config.footer}`;
+
+    interaction.editReply(msg);
   }
 };
