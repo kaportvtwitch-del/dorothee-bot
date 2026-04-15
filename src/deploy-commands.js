@@ -1,24 +1,15 @@
-console.log("CLIENT_ID =", process.env.CLIENT_ID);
 const { REST, Routes } = require("discord.js");
-const fs = require("fs");
-const path = require("path");
-
-const commands = [];
-const commandFiles = fs.readdirSync(path.join(__dirname, "commands"));
-
-for (const file of commandFiles) {
-  const command = require(`./commands/${file}`);
-  commands.push(command.data.toJSON());
-}
+const commands = require("./commands-data"); // ou ton loader
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
 
 (async () => {
   try {
     console.log("🔄 Déploiement GLOBAL...");
+    console.log("CLIENT_ID =", process.env.CLIENT_ID);
 
     await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, 1270838316152918189), // ✅ GLOBAL
+      Routes.applicationCommands("TON_CLIENT_ID_ICI"),
       { body: commands }
     );
 
