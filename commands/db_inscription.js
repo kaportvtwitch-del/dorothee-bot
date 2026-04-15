@@ -1,43 +1,22 @@
-const { SlashCommandBuilder, ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require('discord.js');
+const { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require('discord.js');
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('db_inscription')
-    .setDescription('Saisir ton anniversaire'),
+    .setDescription('Poster le message VIP'),
 
   async execute(interaction) {
 
-    const modal = new ModalBuilder()
-      .setCustomId('birthday_modal')
-      .setTitle('🎂 Ton anniversaire');
-
-    const day = new TextInputBuilder()
-      .setCustomId('day')
-      .setLabel('Jour (1-31)')
-      .setStyle(TextInputStyle.Short);
-
-    const month = new TextInputBuilder()
-      .setCustomId('month')
-      .setLabel('Mois (1-12)')
-      .setStyle(TextInputStyle.Short);
-
-    const year = new TextInputBuilder()
-      .setCustomId('year')
-      .setLabel('Année (ex: 1990)')
-      .setStyle(TextInputStyle.Short);
-
-    const showAge = new TextInputBuilder()
-      .setCustomId('show_age')
-      .setLabel('Afficher âge ? (oui/non)')
-      .setStyle(TextInputStyle.Short);
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(day),
-      new ActionRowBuilder().addComponents(month),
-      new ActionRowBuilder().addComponents(year),
-      new ActionRowBuilder().addComponents(showAge)
+    const row = new ActionRowBuilder().addComponents(
+      new ButtonBuilder()
+        .setCustomId('open_birthday_modal')
+        .setLabel('🎂 S’inscrire pour son anniversaire')
+        .setStyle(ButtonStyle.Primary)
     );
 
-    await interaction.showModal(modal);
+    await interaction.reply({
+      content: "🎉 **Chasse au trésor VIP !**\n\nTrouve ce message et clique pour participer 👇",
+      components: [row]
+    });
   }
 };
