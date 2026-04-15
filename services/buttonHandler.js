@@ -1,3 +1,10 @@
+const {
+  ActionRowBuilder,
+  StringSelectMenuBuilder,
+  ButtonBuilder,
+  ButtonStyle
+} = require("discord.js");
+
 const { getGuild, updateGuild } = require("../database/db");
 
 module.exports.handleButtons = async (interaction) => {
@@ -11,28 +18,59 @@ module.exports.handleButtons = async (interaction) => {
 
   const id = interaction.customId;
 
-  // ⭐ DEVENIR VIP
-  if (id === "become_vip") {
+  // ========================
+  // 📅 OUVRIR CALENDRIER
+  // ========================
+  if (id === "set_date") {
 
-    if (!db.users[userId]) {
-      db.users[userId] = {};
-    }
+    const days = Array.from({ length: 31 }, (_, i) => ({
+      label: `${i + 1}`,
+      value: `${i + 1}`
+    }));
 
-    db.users[userId].vip = true;
+    const months = Array.from({ length: 12 }, (_, i) => ({
+      label: `${i + 1}`,
+      value: `${i + 1}`
+    }));
 
-    updateGuild(guildId, db);
+    const years = Array.from({ length: 80 }, (_, i) => {
+      const y = 2025 - i;
+      return { label: `${y}`, value: `${y}` };
+    });
+
+    const row1 = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("select_day")
+        .setPlaceholder("Jour")
+        .addOptions(days.slice(0, 25))
+    );
+
+    const row2 = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("select_month")
+        .setPlaceholder("Mois")
+        .addOptions(months)
+    );
+
+    const row3 = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("select_year")
+        .setPlaceholder("Année")
+        .addOptions(years.slice(0, 25))
+    );
 
     return interaction.editReply({
-      content: "🌟 Tu es maintenant VIP !"
+      content: "📅 Choisis ta date de naissance",
+      components: [row1, row2, row3]
     });
   }
 
-  // 🔁 TOGGLE AGE
+  // ========================
+  // 🎂 TOGGLE AGE
+  // ========================
   if (id === "toggle_age") {
 
-    if (!db.users[userId]) {
-      db.users[userId] = {};
-    }
+    if (!db.users[userId]) db.users[userId] = {};
 
     db.users[userId].showAge = !db.users[userId].showAge;
 
@@ -40,6 +78,78 @@ module.exports.handleButtons = async (interaction) => {
 
     return interaction.editReply({
       content: `✔ Affichage âge : ${db.users[userId].showAge}`
+    });
+  }
+
+  // ========================
+  // 🗑 DELETE DATE
+  // ========================
+  if (id === "delete_date") {
+
+    if (db.users[userId]) {
+      delete db.users[userId].birth;
+    }
+
+    updateGuild(guildId, db);
+
+    return interaction.editReply({
+      content: "🗑 Date supprimée"
+    });
+  }
+
+  // ========================
+  // ❌ CLOSE
+  // ========================
+  if (id === "close_menu") {
+    return interaction.editReply({
+      content: "❌ Menu fermé",
+      components: []
+    });
+  }
+
+  // ========================
+  // ⚙️ ADMIN MENU
+  // ========================
+  if (id === "admin_menu") {
+
+    if (!interaction.member.permissions.has("Administrator")) {
+      return interaction.editReply({ content: "❌ Admin uniquement" });
+    }
+
+    const row = new ActionRowBuilder().addComponents(
+      new StringSelectMenuBuilder()
+        .setCustomId("admin_select")
+        .setPlaceholder("Gestion")
+        .addOptions([
+          { label: "📜 Liste semaine", value: "list" },
+          { label: "🗑 Reset complet", value: "reset" },
+          { label: "✏️ Modifier titre", value: "title" },
+          { label: "⭐ Modifier titre VIP", value: "vipTitle" },
+          { label: "👤 Modifier titre normal", value: "normalTitle" },
+          { label: "📩 Modifier footer", value: "footer" },
+          { label: "🎭 Rôle anniversaire", value: "role" }
+        ])
+    );
+
+    return interaction.editReply({
+      content: "⚙️ Menu admin",
+      components: [row]
+    });
+  }
+
+  // ========================
+  // ⭐ VIP
+  // ========================
+  if (id === "become_vip") {
+
+    if (!db.users[userId]) db.users[userId] = {};
+
+    db.users[userId].vip = true;
+
+    updateGuild(guildId, db);
+
+    return interaction.editReply({
+      content: "🌟 Tu es VIP !"
     });
   }
 
