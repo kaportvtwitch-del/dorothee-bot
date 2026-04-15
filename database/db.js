@@ -3,50 +3,90 @@ const path = require('path');
 
 const filePath = path.join(__dirname, 'database.json');
 
+// Charger la base
 function load() {
-  if (!fs.existsSync(filePath)) {
-    fs.writeFileSync(filePath, JSON.stringify({}));
+  try {
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, JSON.stringify({}));
+    }
+
+    const data = fs.readFileSync(filePath, 'utf-8');
+
+    if (!data) return {};
+
+    return JSON.parse(data);
+  } catch (err) {
+    console.error("❌ ERREUR LOAD DB:", err);
     return {};
   }
-  return JSON.parse(fs.readFileSync(filePath));
 }
 
-function save(data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
+// Sauvegarder
+function save(db) {
+  fs.writeFileSync(filePath, JSON.stringify(db, null, 2));
 }
 
+// Init serveur
 function initGuild(guildId) {
-  const data = load();
+  const db = load();
 
-  if (!data[guildId]) {
-    data[guildId] = {
+  if (!db[guildId]) {
+    db[guildId] = {
       users: {},
-      config: {
-        birthdayRole: null,
-        birthdayChannel: null,
-        birthdayMessage: "🎉 Joyeux anniversaire {user} !"
+      settings: {
+        birthday_channel: null,
+        birthday_role: null,
+        birthday_message: "🎉 Joyeux anniversaire {user} !"
       }
     };
-    save(data);
+    save(db);
   }
 
-  return data;
+  return db[guildId];
 }
 
-function saveUser(guildId, userId, payload) {
-  const data = initGuild(guildId);
-  data[guildId].users[userId] = payload;
-  save(data);
+// 🔥 LA FONCTION QUI TE MANQUE
+function getGuild(guildId) {
+  const db = load();
+
+  if (!db[guildId]) {
+    return initGuild(guildId);
+  }
+
+  return db[guildId];
 }
 
-function getUsers(guildId) {
-  return initGuild(guildId)[guildId].users;
+// Sauvegarde user
+function setUser(guildId, userId, dataUser) {
+  const db = load();
+
+  if (!db[guildId]) initGuild(guildId);
+
+  db[guildId].users[userId] = {
+    ...(db[guildId].users[userId] || {}),
+    ...dataUser
+  };
+
+  save(db);
 }
 
-function setConfig(guildId, key, value) {
-  const data = initGuild(guildId);
-  data[guildId].config[key] = value;
-  save(data);
+// Supprimer user
+function deleteUser(guildId, userId) {
+  const db = load();
+
+  if (!db[guildId]) return;
+
+  delete db[guildId].users[userId];
+
+  save(db);
 }
 
-module.exports = { initGuild, saveUser, getUsers, setConfig };
+// 🔥 EXPORT COMPLET
+module.exports = {
+  load,
+  save,
+  initGuild,
+  getGuild,
+  setUser,
+  deleteUser
+};
